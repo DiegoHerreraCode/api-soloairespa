@@ -8,7 +8,7 @@ class Admin extends ApiModel
 {
     protected $table = 'admins';
     protected $primaryKey = 'id_admin';
-    protected $keyType = 'Integer';
+    protected $keyType = 'int';
     public $incrementing = false;
     public $timestamps = false;
 
