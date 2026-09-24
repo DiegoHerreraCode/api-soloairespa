@@ -9,6 +9,9 @@ use App\Http\Controllers\TipoServicioTallerController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\PersonalController;
+use App\Http\Controllers\ModeloController;
+use App\Http\Controllers\ServicioTallerController;
+use App\Http\Controllers\CompraController;
 
 // Rutas Públicas (Sin Token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -23,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'getUser']);
 
     Route::apiResources([
+        // Capa 1
         'admins'                 => AdminController::class,
         'marcas'                 => MarcaController::class,
         'tipos-ordenes'          => TipoOrdenController::class,
@@ -30,5 +34,10 @@ Route::middleware('auth:sanctum')->group(function () {
         'clientes'               => ClienteController::class,
         'proveedores'            => ProveedorController::class,
         'personal'               => PersonalController::class,
+
+        // Capa 2
+        'modelos'                => ModeloController::class,
+        'servicios-taller'       => ServicioTallerController::class,
+        'compras'                => CompraController::class,
     ]);
 });
