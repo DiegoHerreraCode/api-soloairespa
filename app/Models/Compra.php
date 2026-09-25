@@ -31,6 +31,21 @@ class Compra extends ApiModel
 
     protected $casts = [
         'tipo_pago' => CompraTipoPago::class,
-        'estado' => CompraEstado::class,
+        'estado'    => CompraEstado::class,
     ];
+
+    public function proveedor()
+    {
+        return $this->belongsTo(Proveedor::class, 'id_proveedor', 'id_proveedor');
+    }
+
+    public function admin()
+    {
+        return $this->belongsTo(Admin::class, 'id_admin', 'id_admin');
+    }
+
+    public function detalles()
+    {
+        return $this->hasMany(DetalleCompra::class, 'id_compra', 'id_compra');
+    }
 }

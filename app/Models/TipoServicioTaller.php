@@ -16,4 +16,9 @@ class TipoServicioTaller extends ApiModel
         'nombre',
         'descripcion',
     ];
+
+    public function serviciosTaller()
+    {
+        return $this->hasMany(ServicioTaller::class, 'id_tipo_servicio_taller', 'id_tipo_servicio_taller');
+    }
 }

@@ -16,5 +16,4 @@ class TipoOrden extends ApiModel
         'nombre',
         'descripcion',
     ];
-
 }

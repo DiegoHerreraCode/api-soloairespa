@@ -19,4 +19,9 @@ class Proveedor extends ApiModel
         'num_tlf',
         'direccion',
     ];
+
+    public function compras()
+    {
+        return $this->hasMany(Compra::class, 'id_proveedor', 'id_proveedor');
+    }
 }

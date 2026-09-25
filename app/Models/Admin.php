@@ -12,20 +12,8 @@ class Admin extends ApiModel
     public $incrementing = false;
     public $timestamps = false;
 
-    // (Lista negra): Especificas qué campos NO se pueden guardar masivamente
-    // Al poner protected $guarded = []; (un array vacío), 
-    // le estás diciendo a Laravel: "No protejas ningún campo, permite que TODOS se puedan guardar masivamente".
+    protected $hidden = [];
 
-    // Ventaja:
-    // Es muy cómodo porque no tienes que estar agregando campos al $fillable cada 
-    // vez que añades una columna a la base de datos.
-
-    //protected $guarded = [];
-
-    protected $hidden = [
-    ];
-
-    // (Lista blanca): Especificas qué campos SI se pueden guardar masivamente
     protected $fillable = [
         'nombre',
         'rut',
@@ -33,5 +21,14 @@ class Admin extends ApiModel
         'direccion',
         'id_user',
     ];
-}
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'id_user', 'id');
+    }
+
+    public function compras()
+    {
+        return $this->hasMany(Compra::class, 'id_admin', 'id_admin');
+    }
+}

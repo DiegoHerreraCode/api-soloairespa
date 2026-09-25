@@ -17,4 +17,14 @@ class Modelo extends ApiModel
         'nombre',
         'descripcion',
     ];
+
+    public function marca()
+    {
+        return $this->belongsTo(Marca::class, 'id_marca', 'id_marca');
+    }
+
+    public function inventarios()
+    {
+        return $this->hasMany(Inventario::class, 'id_modelo', 'id_modelo');
+    }
 }

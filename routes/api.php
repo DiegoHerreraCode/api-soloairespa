@@ -12,6 +12,7 @@ use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\ModeloController;
 use App\Http\Controllers\ServicioTallerController;
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\InventarioController;
 
 // Rutas Públicas (Sin Token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -39,5 +40,8 @@ Route::middleware('auth:sanctum')->group(function () {
         'modelos'                => ModeloController::class,
         'servicios-taller'       => ServicioTallerController::class,
         'compras'                => CompraController::class,
+
+        // Capa 3
+        'inventario'             => InventarioController::class,
     ]);
 });

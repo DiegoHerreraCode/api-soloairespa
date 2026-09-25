@@ -20,6 +20,7 @@ class CompraController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
+            // Cabecera
             'id_proveedor' => 'nullable|integer|exists:proveedores,id_proveedor',
             'id_admin' => 'nullable|integer|exists:admins,id_admin',
             'num_factura_boleta' => 'nullable|string|max:100',
@@ -32,6 +33,21 @@ class CompraController extends Controller
             'monto_total' => 'nullable|numeric',
             'monto_pendiente' => 'nullable|numeric',
             'num_pagos' => 'nullable|integer',
+
+            // Líneas de detalles
+            'detalles' => 'required|array|min:1',
+            'detalles.*.id_inventario' => 'required|integer|exists:inventario,id_inventario',
+            'detalles.*.cantidad' => 'required|integer|min:1',
+            'detalles.*.costo_unitario' => 'required|numeric',
+            'detalles.*.monto_total_linea_sin_iva' => 'nullable|numeric',
+            'detalles.*.porcentaje_iva' => 'nullable|numeric',
+            'detalles.*.monto_iva' => 'nullable|numeric',
+            'detalles.*.monto_total_linea_con_iva' => 'nullable|numeric',
+
+            // Seriales opcionales por detalle para equipos o repuestos
+            'detalles.*.seriales' => 'nullable|array',
+            'detalles.*.seriales.*.serial' => 'nullable|string|max:100',
+            'detalles.*.seriales.*.nombre' => 'nullable|string|max:100',
         ]);
 
         $data = $request->all();
@@ -41,7 +57,7 @@ class CompraController extends Controller
             return $this->errorResponse('Compra no creada', 404);
         }
 
-        return $this->successResponse($compra, 'Compra creada correctamente', 201);
+        return $this->successResponse($compra, 'Compra creada y procesada correctamente', 201);
     }
 
     public function show($id): JsonResponse
@@ -57,36 +73,13 @@ class CompraController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'id_proveedor' => 'integer|exists:proveedores,id_proveedor',
-            'id_admin' => 'integer|exists:admins,id_admin',
-            'num_factura_boleta' => 'string|max:100',
-            'fecha_compra' => 'date',
-            'tipo_pago' => 'in:contado,credito',
             'estado' => 'in:por_pagar,pagada_parcial,pagada',
-            'monto_total_gravado' => 'numeric',
-            'monto_total_exento' => 'numeric',
-            'monto_total_iva' => 'numeric',
-            'monto_total' => 'numeric',
-            'monto_pendiente' => 'numeric',
-            'num_pagos' => 'integer',
+            'monto_pendiente' => 'numeric|min:0',
         ]);
 
-        // Validar que al menos un campo sea modificado
-        if (
-            !$request->has('id_proveedor') &&
-            !$request->has('id_admin') &&
-            !$request->has('num_factura_boleta') &&
-            !$request->has('fecha_compra') &&
-            !$request->has('tipo_pago') &&
-            !$request->has('estado') &&
-            !$request->has('monto_total_gravado') &&
-            !$request->has('monto_total_exento') &&
-            !$request->has('monto_total_iva') &&
-            !$request->has('monto_total') &&
-            !$request->has('monto_pendiente') &&
-            !$request->has('num_pagos')
-        ) {
-            return $this->errorResponse('Al menos un campo debe ser modificado', 400);
+        // Validar que al menos uno de los dos campos permitidos sea enviado
+        if (!$request->has('estado') && !$request->has('monto_pendiente')) {
+            return $this->errorResponse('Debe enviar estado o monto_pendiente para actualizar la compra', 400);
         }
 
         $data = $request->all();
