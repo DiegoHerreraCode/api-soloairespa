@@ -15,6 +15,9 @@ use App\Http\Controllers\CompraController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\EquipoController;
 use App\Http\Controllers\OrdenController;
+use App\Http\Controllers\RepuestoController;
+use App\Http\Controllers\PagoClienteController;
+use App\Http\Controllers\PagoCompraController;
 
 // Rutas Públicas (Sin Token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -49,5 +52,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Capa 4
         'equipos'                => EquipoController::class,
         'ordenes'                => OrdenController::class,
+
+        // Capa 5
+        'repuestos'              => RepuestoController::class,
+        'pagos-clientes'         => PagoClienteController::class,
+        'pagos-compras'          => PagoCompraController::class,
     ]);
 });

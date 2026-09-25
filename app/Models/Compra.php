@@ -48,4 +48,9 @@ class Compra extends ApiModel
     {
         return $this->hasMany(DetalleCompra::class, 'id_compra', 'id_compra');
     }
+
+    public function pagosCompras()
+    {
+        return $this->hasMany(PagoCompra::class, 'id_compra', 'id_compra');
+    }
 }

@@ -25,14 +25,14 @@ class CompraController extends Controller
             'id_admin' => 'nullable|integer|exists:admins,id_admin',
             'num_factura_boleta' => 'nullable|string|max:100',
             'fecha_compra' => 'nullable|date',
-            'tipo_pago' => 'nullable|in:contado,credito',
+            'tipo_pago' => 'required|in:contado,credito',
             'estado' => 'nullable|in:por_pagar,pagada_parcial,pagada',
             'monto_total_gravado' => 'nullable|numeric',
             'monto_total_exento' => 'nullable|numeric',
             'monto_total_iva' => 'nullable|numeric',
             'monto_total' => 'nullable|numeric',
             'monto_pendiente' => 'nullable|numeric',
-            'num_pagos' => 'nullable|integer',
+            'num_pagos' => 'nullable|integer|min:1',
 
             // Líneas de detalles
             'detalles' => 'required|array|min:1',
@@ -44,10 +44,21 @@ class CompraController extends Controller
             'detalles.*.monto_iva' => 'nullable|numeric',
             'detalles.*.monto_total_linea_con_iva' => 'nullable|numeric',
 
-            // Seriales opcionales por detalle para equipos o repuestos
+            // Seriales opcionales por detalle
             'detalles.*.seriales' => 'nullable|array',
             'detalles.*.seriales.*.serial' => 'nullable|string|max:100',
             'detalles.*.seriales.*.nombre' => 'nullable|string|max:100',
+
+            // Arreglo de pagos (1 a N elementos)
+            'pagos' => 'required|array|min:1',
+            'pagos.*.monto_a_pagar' => 'required|numeric|min:0.01',
+            'pagos.*.porcentaje_monto_total' => 'nullable|numeric',
+            'pagos.*.fecha_pago_acordada' => 'required|date',
+            'pagos.*.fecha_pago' => 'nullable|date',
+            'pagos.*.metodo_pago' => 'nullable|in:transferencia,efectivo,cheque',
+            'pagos.*.num_referencia' => 'nullable|string|max:50',
+            'pagos.*.comprobante' => 'nullable|string|max:100',
+            'pagos.*.estado' => 'required|in:pendiente,realizado',
         ]);
 
         $data = $request->all();
@@ -57,7 +68,7 @@ class CompraController extends Controller
             return $this->errorResponse('Compra no creada', 404);
         }
 
-        return $this->successResponse($compra, 'Compra creada y procesada correctamente', 201);
+        return $this->successResponse($compra, 'Compra creada exitosamente', 201);
     }
 
     public function show($id): JsonResponse
@@ -72,33 +83,34 @@ class CompraController extends Controller
 
     public function update(Request $request, $id): JsonResponse
     {
-        $request->validate([
-            'estado' => 'in:por_pagar,pagada_parcial,pagada',
-            'monto_pendiente' => 'numeric|min:0',
-        ]);
-
-        // Validar que al menos uno de los dos campos permitidos sea enviado
-        if (!$request->has('estado') && !$request->has('monto_pendiente')) {
-            return $this->errorResponse('Debe enviar estado o monto_pendiente para actualizar la compra', 400);
+        // Solo permitimos modificar estado y monto_pendiente
+        if (!$request->hasAny(['estado', 'monto_pendiente'])) {
+            return $this->errorResponse(
+                'Debe proporcionar al menos un campo válido para actualizar (estado, monto_pendiente)',
+                400
+            );
         }
 
-        $data = $request->all();
+        $request->validate([
+            'estado' => 'sometimes|required|in:por_pagar,pagada_parcial,pagada',
+            'monto_pendiente' => 'sometimes|required|numeric|min:0',
+        ]);
 
-        $compra = CompraService::update($id, $data);
+        $compra = CompraService::update($id, $request->only(['estado', 'monto_pendiente']));
         if (!$compra) {
             return $this->errorResponse('Compra no encontrada', 404);
         }
 
-        return $this->successResponse($compra, 'Compra actualizada correctamente');
+        return $this->successResponse($compra, 'Compra actualizada exitosamente');
     }
 
     public function destroy($id): JsonResponse
     {
         $compra = CompraService::delete($id);
         if (!$compra) {
-            return $this->errorResponse('Compra no encontrada o no se pudo eliminar', 404);
+            return $this->errorResponse('Compra no encontrada', 404);
         }
 
-        return $this->successResponse($compra, 'Compra eliminada correctamente');
+        return $this->successResponse(null, 'Compra eliminada exitosamente');
     }
 }

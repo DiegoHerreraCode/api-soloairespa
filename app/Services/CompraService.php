@@ -7,25 +7,25 @@ use App\Models\DetalleCompra;
 use App\Models\Inventario;
 use App\Models\Equipo;
 use App\Models\Repuesto;
-use App\Enums\InventarioTipo;
-use App\Enums\RepuestoEstado;
+use App\Models\PagoCompra;
+use App\Enums\CompraEstado;
+use App\Enums\CompraTipoPago;
+use App\Enums\PagoCompraEstado;
 use Illuminate\Support\Facades\DB;
 
 class CompraService
 {
     public static function getAll()
     {
-        // $compras = Compra::with(['detalles.inventario'])->get();
-        $compras = Compra::get();
-        //$compras = Compra::with(['proveedor', 'detalles.inventario.modelo.marca'])->get();
-        return $compras;
+        // return Compra::with(['detalles', 'pagosCompras'])->get();
+        return Compra::with(['detalles.inventario', 'pagosCompras'])->get();
+
+        // return Compra::get();
     }
 
     public static function getOne($id)
     {
-        // $compra = Compra::with(['detalles.inventario'])->find($id);
-        $compra = Compra::find($id);
-        return $compra;
+        return Compra::with(['detalles', 'pagosCompras'])->find($id);
     }
 
     public static function create($data)
@@ -33,17 +33,18 @@ class CompraService
         DB::beginTransaction();
 
         $detalles = $data['detalles'] ?? [];
-        unset($data['detalles']);
+        $pagos = $data['pagos'] ?? [];
+        unset($data['detalles'], $data['pagos']);
 
-        // 1. Cálculos de línea y totales
-        if (!empty($detalles) && is_array($detalles)) {
+        // 1. Cálculos automáticos de la cabecera si no vienen completos
+        if (!isset($data['monto_total']) && !empty($detalles)) {
             $totalGravado = 0.00;
             $totalExento = 0.00;
             $totalIva = 0.00;
             $montoTotal = 0.00;
 
             foreach ($detalles as &$linea) {
-                $cantidad = (int) ($linea['cantidad'] ?? 0);
+                $cantidad = (int) ($linea['cantidad'] ?? 1);
                 $costoUnitario = (float) ($linea['costo_unitario'] ?? 0.00);
                 $porcentajeIva = (float) ($linea['porcentaje_iva'] ?? 0.00);
 
@@ -76,6 +77,9 @@ class CompraService
             $data['monto_pendiente'] = $data['monto_pendiente'] ?? $montoTotal;
         }
 
+        // Una compra siempre nace con estado "por_pagar"
+        $data['estado'] = CompraEstado::POR_PAGAR;
+
         // 2. Crear cabecera de Compra
         $compra = Compra::create($data);
 
@@ -88,21 +92,20 @@ class CompraService
                 $lineaData['id_compra'] = $compra->id_compra;
                 $detalle = DetalleCompra::create($lineaData);
 
-                // Obtener el item de inventario correspondiente
                 $item = Inventario::find($detalle->id_inventario);
                 if ($item) {
-                    // Actualizar Inventario: Promedio Ponderado, Stock y Precio de Venta
                     self::actualizarInventarioTrasCompra($item, $detalle->cantidad, (float) $detalle->costo_unitario);
-
-                    // Generar Equipos o Repuestos serializados según el tipo de inventario
                     self::generarSerializados($detalle, $item, $seriales);
                 }
             }
         }
 
+        // 4. Generación de Pagos a Compras a partir del arreglo de pagos (todos nacen con estado "pendiente")
+        self::generarPagosCompra($compra, $pagos);
+
         DB::commit();
 
-        return $compra->load('detalles');
+        return $compra->load(['detalles', 'pagosCompras']);
     }
 
     public static function update($id, $data)
@@ -118,7 +121,7 @@ class CompraService
 
         DB::commit();
 
-        return $compra->load('detalles');
+        return $compra->load(['detalles', 'pagosCompras']);
     }
 
     public static function delete($id)
@@ -130,17 +133,14 @@ class CompraService
 
         DB::beginTransaction();
 
-        // 1. Obtener detalles para revertir inventario, equipos y repuestos
+        PagoCompra::where('id_compra', $id)->delete();
+
         $detalles = DetalleCompra::where('id_compra', $id)->get();
 
         foreach ($detalles as $detalle) {
-            // Eliminar equipos asociados a esta línea
             Equipo::where('id_detalle_compra', $detalle->id_detalle_compra)->delete();
-
-            // Eliminar repuestos asociados a esta línea
             Repuesto::where('id_detalle_compra', $detalle->id_detalle_compra)->delete();
 
-            // Revertir cantidades en inventario
             $item = Inventario::find($detalle->id_inventario);
             if ($item) {
                 $nuevaCantidadTotal = max(0, (int) $item->cantidad_total - (int) $detalle->cantidad);
@@ -155,7 +155,6 @@ class CompraService
             $detalle->delete();
         }
 
-        // 2. Eliminar cabecera de la compra
         $compra->delete();
 
         DB::commit();
@@ -164,103 +163,101 @@ class CompraService
     }
 
     /**
-     * Actualiza cantidades y costos promedio ponderado en Inventario.
-     * Fórmula margen sobre ventas: PrecioVenta = CostoPromedio / (1 - (PorcentajeGanancia / 100))
+     * Genera los registros en pagos_compras al registrar una nueva compra.
+     * Siempre se recibe un arreglo de 1 a N pagos desde el front.
+     * Todos los pagos nacen siempre en estado "pendiente" con valores iniciales null para los campos de pago.
      */
-    private static function actualizarInventarioTrasCompra(Inventario $item, int $cantidadComprada, float $costoUnitario)
+    public static function generarPagosCompra(Compra $compra, array $pagos = [])
     {
-        $stockActual = (int) $item->cantidad_total;
-        $costoPromActual = (float) ($item->monto_compra_prom ?? $item->ultimo_monto_compra ?? $costoUnitario);
+        $montoTotal = (float) $compra->monto_total;
 
-        // Nuevo stock
-        $nuevoStockTotal = $stockActual + $cantidadComprada;
+        foreach ($pagos as $pago) {
+            $montoCuota = (float) ($pago['monto_a_pagar'] ?? 0.00);
+            $porcentaje = isset($pago['porcentaje_monto_total'])
+                ? (float) $pago['porcentaje_monto_total']
+                : ($montoTotal > 0 ? round(($montoCuota / $montoTotal) * 100, 2) : 0);
+
+            PagoCompra::create([
+                'id_compra' => $compra->id_compra,
+                'id_admin' => $compra->id_admin,
+                'monto_a_pagar' => $montoCuota,
+                'porcentaje_monto_total' => $porcentaje,
+                'fecha_pago' => null,
+                'fecha_pago_acordada' => $pago['fecha_pago_acordada'] ?? now(),
+                'metodo_pago' => null,
+                'num_referencia' => null,
+                'comprobante' => null,
+                'estado' => PagoCompraEstado::PENDIENTE->value,
+            ]);
+        }
+    }
+
+    /**
+     * Actualiza stock y Precio Promedio Ponderado de Inventario.
+     */
+    public static function actualizarInventarioTrasCompra(Inventario $item, int $cantidadComprada, float $costoUnitario)
+    {
+        $stockAnterior = (int) $item->cantidad_total;
+        $costoAnterior = (float) $item->monto_compra_prom;
+
+        $nuevoStockTotal = $stockAnterior + $cantidadComprada;
         $nuevoStockPropio = (int) $item->cantidad_propia + $cantidadComprada;
 
-        // Promedio Ponderado: (StockAnterior * CostoPromAnterior + CantidadNueva * CostoNuevo) / NuevoStockTotal
         if ($nuevoStockTotal > 0) {
-            $nuevoCostoProm = (($stockActual * $costoPromActual) + ($cantidadComprada * $costoUnitario)) / $nuevoStockTotal;
+            $nuevoCostoPromedio = (($stockAnterior * $costoAnterior) + ($cantidadComprada * $costoUnitario)) / $nuevoStockTotal;
         } else {
-            $nuevoCostoProm = $costoUnitario;
+            $nuevoCostoPromedio = $costoUnitario;
         }
 
-        $minCompra = is_null($item->monto_compra_min) ? $costoUnitario : min((float) $item->monto_compra_min, $costoUnitario);
-        $maxCompra = is_null($item->monto_compra_max) ? $costoUnitario : max((float) $item->monto_compra_max, $costoUnitario);
-
-        // Cálculo del Precio de Venta Unitario basado en el margen sobre ventas
-        $porcentajeGanancia = (float) ($item->porcentaje_ganancia ?? 0.00);
-        $precioVentaUnitario = $item->monto_venta_unitario;
-
+        $porcentajeGanancia = (float) $item->porcentaje_ganancia;
         if ($porcentajeGanancia > 0 && $porcentajeGanancia < 100) {
-            // PrecioVenta = Costo / (1 - Ganancia/100)
-            $precioVentaUnitario = round($nuevoCostoProm / (1 - ($porcentajeGanancia / 100)), 2);
-        } elseif ($porcentajeGanancia == 0 && !empty($nuevoCostoProm)) {
-            $precioVentaUnitario = round($nuevoCostoProm, 2);
+            $nuevoPrecioVenta = $nuevoCostoPromedio / (1 - ($porcentajeGanancia / 100));
+        } else {
+            $nuevoPrecioVenta = (float) $item->precio_venta;
         }
 
         $item->update([
             'cantidad_total' => $nuevoStockTotal,
             'cantidad_propia' => $nuevoStockPropio,
-            'ultimo_monto_compra' => round($costoUnitario, 2),
-            'monto_compra_prom' => round($nuevoCostoProm, 2),
-            'monto_compra_min' => round($minCompra, 2),
-            'monto_compra_max' => round($maxCompra, 2),
-            'monto_venta_unitario' => $precioVentaUnitario,
+            'monto_compra_prom' => round($nuevoCostoPromedio, 2),
+            'precio_venta' => round($nuevoPrecioVenta, 2),
         ]);
     }
 
     /**
-     * Genera registros en Equipos o Repuestos según el tipo de inventario.
+     * Genera los registros de Equipos o Repuestos según el tipo de inventario.
      */
-    private static function generarSerializados(DetalleCompra $detalle, Inventario $item, array $seriales)
+    public static function generarSerializados(DetalleCompra $detalle, Inventario $item, array $seriales = [])
     {
-        $tipo = $item->tipo instanceof InventarioTipo ? $item->tipo->value : (string) $item->tipo;
-        $cantidad = (int) $detalle->cantidad;
+        $tipo = $item->tipo instanceof \App\Enums\InventarioTipo ? $item->tipo->value : (string) $item->tipo;
 
-        // Si es EQUIPO
         if ($tipo === 'equipo') {
-            for ($i = 0; $i < $cantidad; $i++) {
-                $serialData = $seriales[$i] ?? null;
-                $numSerial = is_array($serialData) ? ($serialData['serial'] ?? null) : $serialData;
-                $nombreEquipo = is_array($serialData) ? ($serialData['nombre'] ?? $item->nombre) : $item->nombre;
-
-                if (empty($numSerial)) {
-                    $numSerial = $item->sku . '-' . date('Y') . '-' . str_pad($detalle->id_detalle_compra . ($i + 1), 3, '0', STR_PAD_LEFT);
-                }
-
+            for ($i = 0; $i < $detalle->cantidad; $i++) {
+                $serialData = $seriales[$i] ?? [];
                 Equipo::create([
-                    'id_inventario' => $item->id_inventario,
+                    'id_modelo' => $item->id_modelo,
                     'id_detalle_compra' => $detalle->id_detalle_compra,
-                    'serial' => $numSerial,
-                    'nombre' => $nombreEquipo,
+                    'serial' => $serialData['serial'] ?? null,
+                    'nombre' => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
                     'is_deleted' => false,
                 ]);
             }
-        }
-        // Si es COMPRESOR o VALVULA -> Se consideran Repuestos serializados
-        elseif ($tipo === 'compresor' || $tipo === 'valvula') {
-            for ($i = 0; $i < $cantidad; $i++) {
-                $serialData = $seriales[$i] ?? null;
-                $numSerial = is_array($serialData) ? ($serialData['serial'] ?? null) : $serialData;
-                $nombreRepuesto = is_array($serialData) ? ($serialData['nombre'] ?? $item->nombre) : $item->nombre;
-
-                if (empty($numSerial)) {
-                    $numSerial = 'SN-' . $item->sku . '-' . str_pad($detalle->id_detalle_compra . ($i + 1), 3, '0', STR_PAD_LEFT);
-                }
-
+        } elseif (in_array($tipo, ['compresor', 'valvula'])) {
+            for ($i = 0; $i < $detalle->cantidad; $i++) {
+                $serialData = $seriales[$i] ?? [];
                 Repuesto::create([
-                    'id_inventario' => $item->id_inventario,
-                    'id_detalle_compra' => $detalle->id_detalle_compra,
-                    'serial' => $numSerial,
-                    'nombre' => $nombreRepuesto,
-                    'estado' => RepuestoEstado::NUEVO,
-                    'propietario' => true,
-                    'costo_adquisicion' => $detalle->costo_unitario,
+                    'id_inventario'         => $item->id_inventario,
+                    'id_detalle_compra'     => $detalle->id_detalle_compra,
+                    'serial'                => $serialData['serial'] ?? null,
+                    'nombre'                => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
+                    'estado'                => 'nuevo',
+                    'propietario'           => true,
+                    'costo_adquisicion'     => $detalle->costo_unitario,
                     'costo_reparacion_base' => 0.00,
-                    'costo_total' => $detalle->costo_unitario,
-                    'is_deleted' => false,
+                    'costo_total'           => $detalle->costo_unitario,
+                    'is_deleted'            => false,
                 ]);
             }
         }
-        // Si tipo === 'insumo', solo se actualizó el stock en inventario y no se serializa.
     }
 }
