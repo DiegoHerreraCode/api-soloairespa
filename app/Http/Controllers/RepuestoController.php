@@ -28,7 +28,6 @@ class RepuestoController extends Controller
             'propietario' => 'nullable|boolean',
             'id_orden_entrada' => 'nullable|integer|exists:ordenes,id_orden',
             'id_orden_salida' => 'nullable|integer|exists:ordenes,id_orden',
-            'is_deleted' => 'nullable|boolean',
             'costo_adquisicion' => 'nullable|numeric',
             'costo_reparacion_base' => 'nullable|numeric',
             'costo_total' => 'nullable|numeric',
@@ -68,7 +67,6 @@ class RepuestoController extends Controller
             'propietario' => 'boolean',
             'id_orden_entrada' => 'nullable|integer|exists:ordenes,id_orden',
             'id_orden_salida' => 'nullable|integer|exists:ordenes,id_orden',
-            'is_deleted' => 'boolean',
             'costo_adquisicion' => 'numeric',
             'costo_reparacion_base' => 'numeric',
             'costo_total' => 'numeric',
@@ -87,7 +85,6 @@ class RepuestoController extends Controller
             !$request->has('propietario') &&
             !$request->has('id_orden_entrada') &&
             !$request->has('id_orden_salida') &&
-            !$request->has('is_deleted') &&
             !$request->has('costo_adquisicion') &&
             !$request->has('costo_reparacion_base') &&
             !$request->has('costo_total') &&

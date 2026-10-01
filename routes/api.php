@@ -18,6 +18,10 @@ use App\Http\Controllers\OrdenController;
 use App\Http\Controllers\RepuestoController;
 use App\Http\Controllers\PagoClienteController;
 use App\Http\Controllers\PagoCompraController;
+use App\Http\Controllers\ReparacionController;
+use App\Http\Controllers\ReparacionInsumoController;
+use App\Http\Controllers\ReparacionServicioTallerController;
+use App\Http\Controllers\AsignacionController;
 
 // Rutas Públicas (Sin Token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -33,29 +37,37 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResources([
         // Capa 1
-        'admins'                 => AdminController::class,
-        'marcas'                 => MarcaController::class,
-        'tipos-ordenes'          => TipoOrdenController::class,
-        'tipos-servicios-taller' => TipoServicioTallerController::class,
-        'clientes'               => ClienteController::class,
-        'proveedores'            => ProveedorController::class,
-        'personal'               => PersonalController::class,
+        'admins'                        => AdminController::class,
+        'marcas'                        => MarcaController::class,
+        'tipos-ordenes'                 => TipoOrdenController::class,
+        'tipos-servicios-taller'        => TipoServicioTallerController::class,
+        'clientes'                      => ClienteController::class,
+        'proveedores'                   => ProveedorController::class,
+        'personal'                      => PersonalController::class,
 
         // Capa 2
-        'modelos'                => ModeloController::class,
-        'servicios-taller'       => ServicioTallerController::class,
-        'compras'                => CompraController::class,
+        'modelos'                       => ModeloController::class,
+        'servicios-taller'              => ServicioTallerController::class,
+        'compras'                       => CompraController::class,
 
         // Capa 3
-        'inventario'             => InventarioController::class,
+        'inventario'                    => InventarioController::class,
 
         // Capa 4
-        'equipos'                => EquipoController::class,
-        'ordenes'                => OrdenController::class,
+        'equipos'                       => EquipoController::class,
+        'ordenes'                       => OrdenController::class,
 
         // Capa 5
-        'repuestos'              => RepuestoController::class,
-        'pagos-clientes'         => PagoClienteController::class,
-        'pagos-compras'          => PagoCompraController::class,
+        'repuestos'                     => RepuestoController::class,
+        'pagos-clientes'                => PagoClienteController::class,
+        'pagos-compras'                 => PagoCompraController::class,
+
+        // Capa 6
+        'reparaciones'                  => ReparacionController::class,
+
+        // Capa 7 (Insumos, Servicios y Asignaciones)
+        'reparaciones-insumos'          => ReparacionInsumoController::class,
+        'reparaciones-servicios-taller' => ReparacionServicioTallerController::class,
+        'asignaciones'                  => AsignacionController::class,
     ]);
 });

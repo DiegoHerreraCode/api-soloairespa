@@ -11,21 +11,19 @@ use App\Models\PagoCompra;
 use App\Enums\CompraEstado;
 use App\Enums\CompraTipoPago;
 use App\Enums\PagoCompraEstado;
+use App\Services\InventarioService;
 use Illuminate\Support\Facades\DB;
 
 class CompraService
 {
     public static function getAll()
     {
-        // return Compra::with(['detalles', 'pagosCompras'])->get();
-        return Compra::with(['detalles.inventario', 'pagosCompras'])->get();
-
-        // return Compra::get();
+        return Compra::get();
     }
 
     public static function getOne($id)
     {
-        return Compra::with(['detalles', 'pagosCompras'])->find($id);
+        return Compra::find($id);
     }
 
     public static function create($data)
@@ -71,10 +69,10 @@ class CompraService
             unset($linea);
 
             $data['monto_total_gravado'] = $data['monto_total_gravado'] ?? $totalGravado;
-            $data['monto_total_exento'] = $data['monto_total_exento'] ?? $totalExento;
-            $data['monto_total_iva'] = $data['monto_total_iva'] ?? $totalIva;
-            $data['monto_total'] = $data['monto_total'] ?? $montoTotal;
-            $data['monto_pendiente'] = $data['monto_pendiente'] ?? $montoTotal;
+            $data['monto_total_exento']  = $data['monto_total_exento'] ?? $totalExento;
+            $data['monto_total_iva']     = $data['monto_total_iva'] ?? $totalIva;
+            $data['monto_total']         = $data['monto_total'] ?? $montoTotal;
+            $data['monto_pendiente']     = $data['monto_pendiente'] ?? $montoTotal;
         }
 
         // Una compra siempre nace con estado "por_pagar"
@@ -147,7 +145,7 @@ class CompraService
                 $nuevaCantidadPropia = max(0, (int) $item->cantidad_propia - (int) $detalle->cantidad);
 
                 $item->update([
-                    'cantidad_total' => $nuevaCantidadTotal,
+                    'cantidad_total'  => $nuevaCantidadTotal,
                     'cantidad_propia' => $nuevaCantidadPropia,
                 ]);
             }
@@ -178,50 +176,26 @@ class CompraService
                 : ($montoTotal > 0 ? round(($montoCuota / $montoTotal) * 100, 2) : 0);
 
             PagoCompra::create([
-                'id_compra' => $compra->id_compra,
-                'id_admin' => $compra->id_admin,
-                'monto_a_pagar' => $montoCuota,
+                'id_compra'              => $compra->id_compra,
+                'id_admin'               => $compra->id_admin,
+                'monto_a_pagar'          => $montoCuota,
                 'porcentaje_monto_total' => $porcentaje,
-                'fecha_pago' => null,
-                'fecha_pago_acordada' => $pago['fecha_pago_acordada'] ?? now(),
-                'metodo_pago' => null,
-                'num_referencia' => null,
-                'comprobante' => null,
-                'estado' => PagoCompraEstado::PENDIENTE->value,
+                'fecha_pago'             => null,
+                'fecha_pago_acordada'    => $pago['fecha_pago_acordada'] ?? now(),
+                'metodo_pago'            => null,
+                'num_referencia'         => null,
+                'comprobante'            => null,
+                'estado'                 => PagoCompraEstado::PENDIENTE->value,
             ]);
         }
     }
 
     /**
-     * Actualiza stock y Precio Promedio Ponderado de Inventario.
+     * Actualiza stock y Precio Promedio Ponderado de Inventario usando InventarioService.
      */
     public static function actualizarInventarioTrasCompra(Inventario $item, int $cantidadComprada, float $costoUnitario)
     {
-        $stockAnterior = (int) $item->cantidad_total;
-        $costoAnterior = (float) $item->monto_compra_prom;
-
-        $nuevoStockTotal = $stockAnterior + $cantidadComprada;
-        $nuevoStockPropio = (int) $item->cantidad_propia + $cantidadComprada;
-
-        if ($nuevoStockTotal > 0) {
-            $nuevoCostoPromedio = (($stockAnterior * $costoAnterior) + ($cantidadComprada * $costoUnitario)) / $nuevoStockTotal;
-        } else {
-            $nuevoCostoPromedio = $costoUnitario;
-        }
-
-        $porcentajeGanancia = (float) $item->porcentaje_ganancia;
-        if ($porcentajeGanancia > 0 && $porcentajeGanancia < 100) {
-            $nuevoPrecioVenta = $nuevoCostoPromedio / (1 - ($porcentajeGanancia / 100));
-        } else {
-            $nuevoPrecioVenta = (float) $item->precio_venta;
-        }
-
-        $item->update([
-            'cantidad_total' => $nuevoStockTotal,
-            'cantidad_propia' => $nuevoStockPropio,
-            'monto_compra_prom' => round($nuevoCostoPromedio, 2),
-            'precio_venta' => round($nuevoPrecioVenta, 2),
-        ]);
+        InventarioService::actualizarPorCompra($item, $cantidadComprada, $costoUnitario);
     }
 
     /**
@@ -235,11 +209,10 @@ class CompraService
             for ($i = 0; $i < $detalle->cantidad; $i++) {
                 $serialData = $seriales[$i] ?? [];
                 Equipo::create([
-                    'id_modelo' => $item->id_modelo,
+                    'id_modelo'         => $item->id_modelo,
                     'id_detalle_compra' => $detalle->id_detalle_compra,
-                    'serial' => $serialData['serial'] ?? null,
-                    'nombre' => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
-                    'is_deleted' => false,
+                    'serial'            => $serialData['serial'] ?? null,
+                    'nombre'            => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
                 ]);
             }
         } elseif (in_array($tipo, ['compresor', 'valvula'])) {
@@ -255,7 +228,6 @@ class CompraService
                     'costo_adquisicion'     => $detalle->costo_unitario,
                     'costo_reparacion_base' => 0.00,
                     'costo_total'           => $detalle->costo_unitario,
-                    'is_deleted'            => false,
                 ]);
             }
         }

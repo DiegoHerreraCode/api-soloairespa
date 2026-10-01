@@ -22,7 +22,6 @@ class Repuesto extends ApiModel
         'propietario',
         'id_orden_entrada',
         'id_orden_salida',
-        'is_deleted',
         'costo_adquisicion',
         'costo_reparacion_base',
         'costo_total',
@@ -43,5 +42,9 @@ class Repuesto extends ApiModel
     public function detalleCompra()
     {
         return $this->belongsTo(DetalleCompra::class, 'id_detalle_compra', 'id_detalle_compra');
+    }
+    public function reparaciones()
+    {
+        return $this->hasMany(Reparacion::class, 'id_repuesto', 'id_repuesto');
     }
 }

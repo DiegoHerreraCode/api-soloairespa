@@ -32,6 +32,9 @@ class PagoClienteController extends Controller
         $data = $request->all();
 
         $pago = PagoClienteService::create($data);
+        if ($pago === false) {
+            return $this->errorResponse('En órdenes de tipo reparación solo se permite registrar pagos cuando la orden está finalizada', 422);
+        }
         if (!$pago) {
             return $this->errorResponse('Pago no creado', 404);
         }

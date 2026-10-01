@@ -9,13 +9,13 @@ class EquipoService
 {
     public static function getAll()
     {
-        $equipos = Equipo::with(['inventario.modelo.marca', 'detalleCompra.compra'])->where('is_deleted', false)->get();
+        $equipos = Equipo::where('is_deleted', false)->get();
         return $equipos;
     }
 
     public static function getOne($id)
     {
-        $equipo = Equipo::with(['inventario.modelo.marca', 'detalleCompra.compra'])->where('is_deleted', false)->find($id);
+        $equipo = Equipo::where('is_deleted', false)->find($id);
         return $equipo;
     }
 

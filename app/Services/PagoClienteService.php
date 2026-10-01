@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PagoCliente;
 use App\Models\Orden;
+use App\Services\OrdenService;
 use App\Enums\OrdenEstadoAdmin;
 use Illuminate\Support\Facades\DB;
 
@@ -11,13 +12,13 @@ class PagoClienteService
 {
     public static function getAll()
     {
-        $pagos = PagoCliente::with(['cliente', 'orden'])->get();
+        $pagos = PagoCliente::get();
         return $pagos;
     }
 
     public static function getOne($id)
     {
-        $pago = PagoCliente::with(['cliente', 'orden'])->find($id);
+        $pago = PagoCliente::find($id);
         return $pago;
     }
 
@@ -29,6 +30,19 @@ class PagoClienteService
 
     public static function create($data)
     {
+        // En órdenes de tipo reparación sólo se debe permitir registrar pagos cuando el estado operativo es finalizada
+        $ordenCheck = Orden::with('tipoOrden')->find($data['id_orden'] ?? null);
+        if ($ordenCheck) {
+            $nombreTipo = $ordenCheck->tipoOrden ? strtolower(trim($ordenCheck->tipoOrden->nombre)) : '';
+            $estadoOperativo = $ordenCheck->estado_operativo instanceof \App\Enums\OrdenEstadoOperativo
+                ? $ordenCheck->estado_operativo->value
+                : (string) $ordenCheck->estado_operativo;
+
+            if ($nombreTipo === 'reparacion' && $estadoOperativo !== 'finalizada') {
+                return false;
+            }
+        }
+
         DB::beginTransaction();
 
         $data['fecha_pago'] = $data['fecha_pago'] ?? now();
@@ -43,11 +57,17 @@ class PagoClienteService
 
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
+            $estadoAdminAnterior = $orden->estado_administrativo instanceof OrdenEstadoAdmin ? $orden->estado_administrativo->value : (string) $orden->estado_administrativo;
+
             $orden->update([
                 'monto_pendiente'       => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
                 'last_update'           => now(),
             ]);
+
+            if ($estadoAdmin === OrdenEstadoAdmin::PAGADA && $estadoAdminAnterior !== 'pagada') {
+                OrdenService::liquidarSalidaOrdenPagada($orden->fresh());
+            }
         }
 
         DB::commit();
@@ -72,11 +92,17 @@ class PagoClienteService
 
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
+            $estadoAdminAnterior = $orden->estado_administrativo instanceof OrdenEstadoAdmin ? $orden->estado_administrativo->value : (string) $orden->estado_administrativo;
+
             $orden->update([
                 'monto_pendiente'       => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
                 'last_update'           => now(),
             ]);
+
+            if ($estadoAdmin === OrdenEstadoAdmin::PAGADA && $estadoAdminAnterior !== 'pagada') {
+                OrdenService::liquidarSalidaOrdenPagada($orden->fresh());
+            }
         }
 
         DB::commit();
@@ -102,11 +128,17 @@ class PagoClienteService
 
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
+            $estadoAdminAnterior = $orden->estado_administrativo instanceof OrdenEstadoAdmin ? $orden->estado_administrativo->value : (string) $orden->estado_administrativo;
+
             $orden->update([
                 'monto_pendiente'       => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
                 'last_update'           => now(),
             ]);
+
+            if ($estadoAdmin === OrdenEstadoAdmin::PAGADA && $estadoAdminAnterior !== 'pagada') {
+                OrdenService::liquidarSalidaOrdenPagada($orden->fresh());
+            }
         }
 
         DB::commit();

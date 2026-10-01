@@ -9,29 +9,22 @@ class RepuestoService
 {
     public static function getAll()
     {
-        $repuestos = Repuesto::with(['inventario.modelo.marca', 'detalleCompra.compra'])->where('is_deleted', false)->get();
-        return $repuestos;
+        return Repuesto::get();
     }
 
     public static function getOne($id)
     {
-        $repuesto = Repuesto::with(['inventario.modelo.marca', 'detalleCompra.compra'])->where('is_deleted', false)->find($id);
-        return $repuesto;
+        return Repuesto::find($id);
     }
 
     public static function create($data)
     {
         DB::beginTransaction();
 
-        $costoAdquisicion = (float) ($data['costo_adquisicion'] ?? 0.00);
-        $costoReparacionBase = (float) ($data['costo_reparacion_base'] ?? 0.00);
-
-        if (!isset($data['costo_total'])) {
-            $data['costo_total'] = $costoAdquisicion + $costoReparacionBase;
-        }
-
         $repuesto = Repuesto::create($data);
+
         DB::commit();
+
         return $repuesto;
     }
 
@@ -44,17 +37,10 @@ class RepuestoService
 
         DB::beginTransaction();
 
-        $costoAdquisicion = isset($data['costo_adquisicion']) ? (float) $data['costo_adquisicion'] : (float) $repuesto->costo_adquisicion;
-        $costoReparacionBase = isset($data['costo_reparacion_base']) ? (float) $data['costo_reparacion_base'] : (float) $repuesto->costo_reparacion_base;
-
-        if (isset($data['costo_adquisicion']) || isset($data['costo_reparacion_base'])) {
-            if (!isset($data['costo_total'])) {
-                $data['costo_total'] = $costoAdquisicion + $costoReparacionBase;
-            }
-        }
-
         $repuesto->update($data);
+
         DB::commit();
+
         return $repuesto;
     }
 
@@ -66,9 +52,9 @@ class RepuestoService
         }
 
         DB::beginTransaction();
-        // Borrado lógico según la columna is_deleted del DDL
-        $repuesto->update(['is_deleted' => true]);
+        $repuesto->delete();
         DB::commit();
+
         return $repuesto;
     }
 }

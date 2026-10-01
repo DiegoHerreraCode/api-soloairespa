@@ -16,6 +16,7 @@ class Orden extends ApiModel
 
     protected $fillable = [
         'id_cliente',
+        'id_tipo_orden',
         'id_admin',
         'fecha_creacion',
         'monto_total_gravado',
@@ -42,6 +43,11 @@ class Orden extends ApiModel
         return $this->belongsTo(Cliente::class, 'id_cliente', 'id_cliente');
     }
 
+    public function tipoOrden()
+    {
+        return $this->belongsTo(TipoOrden::class, 'id_tipo_orden', 'id_tipo_orden');
+    }
+
     public function admin()
     {
         return $this->belongsTo(Admin::class, 'id_admin', 'id_admin');
@@ -60,5 +66,14 @@ class Orden extends ApiModel
     public function repuestosSalida()
     {
         return $this->hasMany(Repuesto::class, 'id_orden_salida', 'id_orden');
+    }
+
+    public function reparaciones()
+    {
+        return $this->hasMany(Reparacion::class, 'id_orden', 'id_orden');
+    }
+    public function detalles()
+    {
+        return $this->hasMany(DetalleOrden::class, 'id_orden', 'id_orden');
     }
 }

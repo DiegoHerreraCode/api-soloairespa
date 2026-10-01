@@ -12,13 +12,13 @@ class PagoCompraService
 {
     public static function getAll()
     {
-        $pagos = PagoCompra::with(['compra', 'admin'])->get();
+        $pagos = PagoCompra::get();
         return $pagos;
     }
 
     public static function getOne($id)
     {
-        $pago = PagoCompra::with(['compra', 'admin'])->find($id);
+        $pago = PagoCompra::find($id);
         return $pago;
     }
 

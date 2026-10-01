@@ -16,4 +16,8 @@ class TipoOrden extends ApiModel
         'nombre',
         'descripcion',
     ];
+    public function ordenes()
+    {
+        return $this->hasMany(Orden::class, 'id_tipo_orden', 'id_tipo_orden');
+    }
 }
