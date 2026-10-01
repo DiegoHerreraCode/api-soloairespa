@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ReparacionServicioTaller;
 use App\Models\Reparacion;
+use App\Models\Orden;
+use App\Enums\OrdenEstadoOperativo;
 use App\Enums\TallerEstado;
 use App\Enums\ReparacionEstado;
 use App\Models\Asignacion;
@@ -72,6 +74,17 @@ class ReparacionServicioTallerService
                     'fecha_inicio' => $reparacion->fecha_inicio ?? now(),
                     'id_admin_fecha_inicio' => $reparacion->id_admin_fecha_inicio ?? auth()->id(),
                 ]);
+            }
+
+            // Cambiar automáticamente el estado operativo de la orden a 'en_proceso' si aún estaba en_espera
+            if ($reparacion && !empty($reparacion->id_orden)) {
+                $orden = Orden::find($reparacion->id_orden);
+                if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
+                    $orden->update([
+                        'estado_operativo' => OrdenEstadoOperativo::EN_PROCESO->value,
+                        'last_update'      => now(),
+                    ]);
+                }
             }
         }
 

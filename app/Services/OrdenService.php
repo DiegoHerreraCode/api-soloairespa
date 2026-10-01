@@ -7,10 +7,10 @@ use App\Models\DetalleOrden;
 use App\Models\Inventario;
 use App\Models\Repuesto;
 use App\Models\TipoOrden;
-use App\Services\InventarioService;
 use App\Enums\RepuestoEstado;
 use App\Enums\OrdenEstadoOperativo;
 use App\Enums\OrdenEstadoAdmin;
+use App\Services\InventarioService;
 use Illuminate\Support\Facades\DB;
 
 class OrdenService
@@ -45,7 +45,19 @@ class OrdenService
         }
 
         $data['estado_administrativo'] = $data['estado_administrativo'] ?? OrdenEstadoAdmin::PENDIENTE_PAGO->value;
-        $data['fecha_creacion']        = $data['fecha_creacion'] ?? now();
+                if (!empty($data['fecha_creacion'])) {
+            $data['fecha_creacion'] = strlen($data['fecha_creacion']) === 10
+                ? $data['fecha_creacion'] . ' ' . now()->format('H:i:s')
+                : $data['fecha_creacion'];
+        } else {
+            $data['fecha_creacion'] = now();
+        }
+
+        if (!empty($data['fecha_entrega_reparacion'])) {
+            $data['fecha_entrega_reparacion'] = strlen($data['fecha_entrega_reparacion']) === 10
+                ? $data['fecha_entrega_reparacion'] . ' ' . now()->format('H:i:s')
+                : $data['fecha_entrega_reparacion'];
+        }
         $data['last_update']           = now();
 
         $orden = Orden::create($data);
@@ -80,12 +92,13 @@ class OrdenService
             $data['fecha_anulacion'] = now();
         }
 
-        $estadoAnterior = $orden->estado_administrativo instanceof OrdenEstadoAdmin ? $orden->estado_administrativo->value : (string) $orden->estado_administrativo;
-        $orden->update($data);
-
-        if (isset($data['estado_administrativo']) && $data['estado_administrativo'] === 'pagada' && $estadoAnterior !== 'pagada') {
-            self::liquidarSalidaOrdenPagada($orden->fresh());
+                if (!empty($data['fecha_entrega_reparacion'])) {
+            $data['fecha_entrega_reparacion'] = strlen($data['fecha_entrega_reparacion']) === 10
+                ? $data['fecha_entrega_reparacion'] . ' ' . now()->format('H:i:s')
+                : $data['fecha_entrega_reparacion'];
         }
+
+        $orden->update($data);
 
         DB::commit();
 
@@ -108,7 +121,10 @@ class OrdenService
     }
 
     /**
-     * Procesa líneas de Venta: descuenta stock de inventario propio y calcula totales.
+     * Procesa líneas de Venta:
+     * - Para insumos: crea 1 registro en detalles_ordenes con la cantidad y descuenta stock propio.
+     * - Para repuestos serializados: crea N registros en detalles_ordenes (cantidad = 1), marca id_orden_salida,
+     *   monto_venta_real y utilidad en cada repuesto exacto, y descuenta stock e historiales de venta.
      */
     public static function procesarVenta(Orden $orden, array $detalles)
     {
@@ -118,39 +134,138 @@ class OrdenService
         $totalNeto = 0.00;
 
         foreach ($detalles as $linea) {
-            $item = isset($linea['id_inventario_repuesto_saliente'])
-                ? Inventario::find($linea['id_inventario_repuesto_saliente'])
-                : (isset($linea['id_inventario_insumo_saliente']) ? Inventario::find($linea['id_inventario_insumo_saliente']) : null);
+            // CASO A: INSUMOS (no serializados)
+            if (!empty($linea['id_inventario_insumo_saliente'])) {
+                $item = Inventario::find($linea['id_inventario_insumo_saliente']);
+                $cantidad = (int) ($linea['cantidad'] ?? 1);
+                $precioUnitario = (float) ($linea['precio_unitario'] ?? ($item ? $item->monto_venta_unitario : 0.00));
+                $porcentajeIva = (float) ($linea['porcentaje_iva'] ?? ($item ? $item->porcentaje_iva : 19.00));
 
-            $cantidad = (int) ($linea['cantidad'] ?? 1);
-            $precioUnitario = (float) ($linea['precio_unitario'] ?? ($item ? $item->monto_venta_unitario : 0.00));
-            $porcentajeIva = (float) ($linea['porcentaje_iva'] ?? ($item ? $item->porcentaje_iva : 19.00));
+                $subtotalLinea = round($cantidad * $precioUnitario, 2);
+                $ivaLinea = round($subtotalLinea * ($porcentajeIva / 100), 2);
+                $totalLinea = $subtotalLinea + $ivaLinea;
 
-            $subtotalLinea = round($cantidad * $precioUnitario, 2);
-            $ivaLinea = round($subtotalLinea * ($porcentajeIva / 100), 2);
-            $totalLinea = $subtotalLinea + $ivaLinea;
+                DetalleOrden::create([
+                    'id_orden'                        => $orden->id_orden,
+                    'id_inventario_insumo_saliente'   => $linea['id_inventario_insumo_saliente'],
+                    'id_inventario_repuesto_saliente' => null,
+                    'id_repuesto_saliente'            => null,
+                    'id_inventario_repuesto_entrante' => null,
+                    'id_repuesto_entrante'            => null,
+                    'cantidad'                        => $cantidad,
+                    'precio_unitario'                 => $precioUnitario,
+                    'monto_tasacion'                  => 0.00,
+                    'monto_total_linea_sin_iva'       => $subtotalLinea,
+                    'porcentaje_iva'                  => $porcentajeIva,
+                    'monto_iva'                       => $ivaLinea,
+                    'monto_total_linea_con_iva'       => $totalLinea,
+                ]);
 
-            DetalleOrden::create([
-                'id_orden'                        => $orden->id_orden,
-                'id_inventario_insumo_saliente'   => $linea['id_inventario_insumo_saliente'] ?? null,
-                'id_inventario_repuesto_saliente' => $linea['id_inventario_repuesto_saliente'] ?? null,
-                'id_inventario_repuesto_entrante' => null,
-                'cantidad'                        => $cantidad,
-                'precio_unitario'                 => $precioUnitario,
-                'monto_tasacion'                  => 0.00,
-                'monto_total_linea_sin_iva'       => $subtotalLinea,
-                'porcentaje_iva'                  => $porcentajeIva,
-                'monto_iva'                       => $ivaLinea,
-                'monto_total_linea_con_iva'       => $totalLinea,
-            ]);
+                // Descontar inmediatamente inventario y registrar metricas de venta
+                if ($item) {
+                    InventarioService::actualizarPorVenta($item, $cantidad, $precioUnitario);
+                }
 
-            if ($porcentajeIva > 0) {
-                $totalGravado += $subtotalLinea;
-            } else {
-                $totalExento += $subtotalLinea;
+                if ($porcentajeIva > 0) {
+                    $totalGravado += $subtotalLinea;
+                } else {
+                    $totalExento += $subtotalLinea;
+                }
+                $totalIva += $ivaLinea;
+                $totalNeto += $totalLinea;
             }
-            $totalIva += $ivaLinea;
-            $totalNeto += $totalLinea;
+
+            // CASO B: REPUESTOS SERIALIZADOS (compresor o valvula)
+            if (!empty($linea['id_inventario_repuesto_saliente'])) {
+                $item = Inventario::find($linea['id_inventario_repuesto_saliente']);
+                $porcentajeIva = (float) ($linea['porcentaje_iva'] ?? ($item ? $item->porcentaje_iva : 19.00));
+                $precioSugerido = (float) ($linea['precio_unitario'] ?? ($item ? $item->monto_venta_unitario : 0.00));
+
+                $listaRepuestosSalientes = [];
+
+                if (!empty($linea['repuestos_salientes']) && is_array($linea['repuestos_salientes'])) {
+                    foreach ($linea['repuestos_salientes'] as $rs) {
+                        if (is_array($rs)) {
+                            $listaRepuestosSalientes[] = [
+                                'id_repuesto'     => $rs['id_repuesto'],
+                                'precio_unitario' => (float) ($rs['precio_unitario'] ?? $precioSugerido),
+                            ];
+                        } else {
+                            $listaRepuestosSalientes[] = [
+                                'id_repuesto'     => (int) $rs,
+                                'precio_unitario' => $precioSugerido,
+                            ];
+                        }
+                    }
+                } elseif (!empty($linea['id_repuesto_saliente'])) {
+                    $listaRepuestosSalientes[] = [
+                        'id_repuesto'     => (int) $linea['id_repuesto_saliente'],
+                        'precio_unitario' => $precioSugerido,
+                    ];
+                } else {
+                    $cantRequerida = (int) ($linea['cantidad'] ?? 1);
+                    $repuestosDisponibles = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
+                        ->whereNull('id_orden_salida')
+                        ->where('propietario', true)
+                        ->limit($cantRequerida)
+                        ->get();
+
+                    foreach ($repuestosDisponibles as $rd) {
+                        $listaRepuestosSalientes[] = [
+                            'id_repuesto'     => $rd->id_repuesto,
+                            'precio_unitario' => $precioSugerido,
+                        ];
+                    }
+                }
+
+                // Crear 1 registro en detalles_ordenes por CADA repuesto serializado
+                foreach ($listaRepuestosSalientes as $itemRep) {
+                    $repuesto = Repuesto::find($itemRep['id_repuesto']);
+                    $precioUnitario = $itemRep['precio_unitario'];
+                    $subtotalLinea = $precioUnitario;
+                    $ivaLinea = round($subtotalLinea * ($porcentajeIva / 100), 2);
+                    $totalLinea = $subtotalLinea + $ivaLinea;
+
+                    DetalleOrden::create([
+                        'id_orden'                        => $orden->id_orden,
+                        'id_inventario_repuesto_saliente' => $linea['id_inventario_repuesto_saliente'],
+                        'id_repuesto_saliente'            => $itemRep['id_repuesto'],
+                        'id_inventario_insumo_saliente'   => null,
+                        'id_inventario_repuesto_entrante' => null,
+                        'id_repuesto_entrante'            => null,
+                        'cantidad'                        => 1,
+                        'precio_unitario'                 => $precioUnitario,
+                        'monto_tasacion'                  => 0.00,
+                        'monto_total_linea_sin_iva'       => $subtotalLinea,
+                        'porcentaje_iva'                  => $porcentajeIva,
+                        'monto_iva'                       => $ivaLinea,
+                        'monto_total_linea_con_iva'       => $totalLinea,
+                    ]);
+
+                    // Descontar repuesto serializado inmediatamente al crear la orden
+                    if ($repuesto) {
+                        $costoTotal = (float) $repuesto->costo_total;
+                        $repuesto->update([
+                            'id_orden_salida'  => $orden->id_orden,
+                            'monto_venta_real' => $precioUnitario,
+                            'utilidad'         => round($precioUnitario - $costoTotal, 2),
+                        ]);
+                    }
+
+                    // Actualizar inventario por cada unidad vendida
+                    if ($item) {
+                        InventarioService::actualizarPorVenta($item, 1, $precioUnitario);
+                    }
+
+                    if ($porcentajeIva > 0) {
+                        $totalGravado += $subtotalLinea;
+                    } else {
+                        $totalExento += $subtotalLinea;
+                    }
+                    $totalIva += $ivaLinea;
+                    $totalNeto += $totalLinea;
+                }
+            }
         }
 
         $orden->update([
@@ -164,8 +279,8 @@ class OrdenService
 
     /**
      * Procesa Recambio:
-     * - Sale repuesto del taller a precio_unitario (descuenta stock propio).
-     * - Entra repuesto malo del cliente a monto_tasacion, propiedad de la empresa y estado 'pendiente_reparacion' (suma stock propio).
+     * - Sale repuesto del taller a precio_unitario (descuenta stock propio y asigna id_orden_salida, monto_venta_real, utilidad).
+     * - Entra repuesto malo del cliente a monto_tasacion (propietario = true, pendiente_reparacion, suma stock propio) y asigna id_repuesto_entrante.
      * - El cliente paga la diferencia: (precio_unitario - monto_tasacion) + IVA.
      */
     public static function procesarRecambio(Orden $orden, array $detalles)
@@ -179,41 +294,60 @@ class OrdenService
             $itemSaliente = isset($linea['id_inventario_repuesto_saliente']) ? Inventario::find($linea['id_inventario_repuesto_saliente']) : null;
             $itemEntrante = isset($linea['id_inventario_repuesto_entrante']) ? Inventario::find($linea['id_inventario_repuesto_entrante']) : null;
 
-            $cantidad = (int) ($linea['cantidad'] ?? 1);
+            $cantidad = 1;
             $precioUnitario = (float) ($linea['precio_unitario'] ?? ($itemSaliente ? $itemSaliente->monto_venta_unitario : 0.00));
             $montoTasacion  = (float) ($linea['monto_tasacion'] ?? 0.00);
             $porcentajeIva  = (float) ($linea['porcentaje_iva'] ?? 19.00);
 
-            // La base imponible para el cliente es la diferencia tasada
             $diferenciaUnitario = max(0.00, $precioUnitario - $montoTasacion);
-            $subtotalLinea = round($cantidad * $diferenciaUnitario, 2);
+            $subtotalLinea = round($diferenciaUnitario, 2);
             $ivaLinea = round($subtotalLinea * ($porcentajeIva / 100), 2);
             $totalLinea = $subtotalLinea + $ivaLinea;
 
-            DetalleOrden::create([
-                'id_orden'                        => $orden->id_orden,
-                'id_inventario_insumo_saliente'   => null,
-                'id_inventario_repuesto_saliente' => $linea['id_inventario_repuesto_saliente'] ?? null,
-                'id_inventario_repuesto_entrante' => $linea['id_inventario_repuesto_entrante'] ?? null,
-                'cantidad'                        => $cantidad,
-                'precio_unitario'                 => $precioUnitario,
-                'monto_tasacion'                  => $montoTasacion,
-                'monto_total_linea_sin_iva'       => $subtotalLinea,
-                'porcentaje_iva'                  => $porcentajeIva,
-                'monto_iva'                       => $ivaLinea,
-                'monto_total_linea_con_iva'       => $totalLinea,
-            ]);
+            // 1. REPUESTO SALIENTE: identificar, descontar stock propio y actualizar metricas
+            $idRepuestoSaliente = $linea['id_repuesto_saliente'] ?? null;
+            if (!$idRepuestoSaliente && !empty($linea['id_inventario_repuesto_saliente'])) {
+                $repDisponible = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
+                    ->whereNull('id_orden_salida')
+                    ->where('propietario', true)
+                    ->first();
+                if ($repDisponible) {
+                    $idRepuestoSaliente = $repDisponible->id_repuesto;
+                }
+            }
 
-            // REPUESTO ENTRANTE: pasa a ser propiedad del taller (propietario = true, pendiente_reparacion, costo = tasacion)
+            if ($idRepuestoSaliente) {
+                $repSaliente = Repuesto::find($idRepuestoSaliente);
+                if ($repSaliente) {
+                    $costoTotal = (float) $repSaliente->costo_total;
+                    $repSaliente->update([
+                        'id_orden_salida'  => $orden->id_orden,
+                        'monto_venta_real' => $precioUnitario,
+                        'utilidad'         => round($precioUnitario - $costoTotal, 2),
+                    ]);
+                }
+            }
+
+            if ($itemSaliente) {
+                InventarioService::actualizarPorVenta($itemSaliente, 1, $precioUnitario);
+            }
+
+            // 2. REPUESTO ENTRANTE: pasa a ser propiedad del taller
+            // Si el item entrante es el mismo item saliente, refrescar el modelo para tener el stock ya descontado
+            if ($itemEntrante && $itemSaliente && $itemEntrante->id_inventario === $itemSaliente->id_inventario) {
+                $itemEntrante->refresh();
+            }
+
+            $idRepuestoEntranteCreado = null;
             if ($itemEntrante) {
-                $nuevoTotal = (int) $itemEntrante->cantidad_total + $cantidad;
-                $nuevoPropio = (int) $itemEntrante->cantidad_propia + $cantidad;
+                $nuevoTotal = (int) $itemEntrante->cantidad_total + 1;
+                $nuevoPropio = (int) $itemEntrante->cantidad_propia + 1;
                 $itemEntrante->update([
                     'cantidad_total'  => $nuevoTotal,
                     'cantidad_propia' => $nuevoPropio,
                 ]);
 
-                Repuesto::create([
+                $repEntrante = Repuesto::create([
                     'id_inventario'     => $itemEntrante->id_inventario,
                     'serial'            => $linea['serial_entrante'] ?? null,
                     'nombre'            => $linea['nombre_entrante'] ?? ($itemEntrante->nombre . ' (Recambio)'),
@@ -222,7 +356,25 @@ class OrdenService
                     'costo_adquisicion' => $montoTasacion,
                     'id_orden_entrada'  => $orden->id_orden,
                 ]);
+                $idRepuestoEntranteCreado = $repEntrante->id_repuesto;
             }
+
+            // 3. Crear registro en detalles_ordenes con id_repuesto_saliente e id_repuesto_entrante
+            DetalleOrden::create([
+                'id_orden'                        => $orden->id_orden,
+                'id_inventario_insumo_saliente'   => null,
+                'id_inventario_repuesto_saliente' => $linea['id_inventario_repuesto_saliente'] ?? null,
+                'id_repuesto_saliente'            => $idRepuestoSaliente,
+                'id_inventario_repuesto_entrante' => $linea['id_inventario_repuesto_entrante'] ?? null,
+                'id_repuesto_entrante'            => $idRepuestoEntranteCreado,
+                'cantidad'                        => 1,
+                'precio_unitario'                 => $precioUnitario,
+                'monto_tasacion'                  => $montoTasacion,
+                'monto_total_linea_sin_iva'       => $subtotalLinea,
+                'porcentaje_iva'                  => $porcentajeIva,
+                'monto_iva'                       => $ivaLinea,
+                'monto_total_linea_con_iva'       => $totalLinea,
+            ]);
 
             if ($porcentajeIva > 0) {
                 $totalGravado += $subtotalLinea;
@@ -265,81 +417,7 @@ class OrdenService
                     'propietario'       => false,
                     'costo_adquisicion' => 0.00,
                     'id_orden_entrada'  => $orden->id_orden,
-                                    ]);
-            }
-        }
-    }
-
-    /**
-     * Liquida la salida contable y fisica de una orden cuando pasa a estado 'pagada':
-     * - Asigna id_orden_salida, monto_venta_real y utilidad en repuestos.
-     * - Descuenta stock de inventario (propio o cliente segun el caso).
-     * - Actualiza las metricas historicas de venta en inventario.
-     */
-    public static function liquidarSalidaOrdenPagada(Orden $orden)
-    {
-        $tipoOrden = TipoOrden::find($orden->id_tipo_orden);
-        $nombreTipo = $tipoOrden ? strtolower(trim($tipoOrden->nombre)) : '';
-
-        if ($nombreTipo === 'reparacion') {
-            // Repuestos del cliente que ingresaron en esta orden
-            $repuestos = Repuesto::where('id_orden_entrada', $orden->id_orden)->get();
-            $detalles = DetalleOrden::where('id_orden', $orden->id_orden)->get();
-
-            foreach ($repuestos as $index => $repuesto) {
-                // Solo liquidar si aun no tenia asignada id_orden_salida
-                if (!empty($repuesto->id_orden_salida)) {
-                    continue;
-                }
-
-                $detalle = $detalles->firstWhere('id_inventario_repuesto_saliente', $repuesto->id_inventario) ?? ($detalles[$index] ?? null);
-                $montoVentaReal = $detalle ? (float) $detalle->precio_unitario : (float) ($repuesto->costo_reparacion_con_ganancia ?? 0.00);
-                $costoTotal = (float) $repuesto->costo_total;
-                $utilidad = round($montoVentaReal - $costoTotal, 2);
-
-                $repuesto->update([
-                    'id_orden_salida'  => $orden->id_orden,
-                    'monto_venta_real' => $montoVentaReal,
-                    'utilidad'         => $utilidad,
                 ]);
-
-                // Actualizar inventario: disminuye stock total y stock cliente, y actualiza metricas de venta
-                $item = Inventario::find($repuesto->id_inventario);
-                if ($item) {
-                    InventarioService::actualizarPorReparacionEntrega($item, 1, $montoVentaReal);
-                }
-            }
-        } elseif (in_array($nombreTipo, ['venta', 'recambio'])) {
-            $detalles = DetalleOrden::where('id_orden', $orden->id_orden)->get();
-
-            foreach ($detalles as $linea) {
-                $idInventario = $linea->id_inventario_repuesto_saliente ?? $linea->id_inventario_insumo_saliente;
-                $item = $idInventario ? Inventario::find($idInventario) : null;
-                $cantidad = (int) $linea->cantidad;
-                $precioUnitario = (float) $linea->precio_unitario;
-
-                // Descontar inventario propio y actualizar estadisticas de venta
-                if ($item) {
-                    InventarioService::actualizarPorVenta($item, $cantidad, $precioUnitario);
-                }
-
-                // Si es un repuesto, buscar repuestos disponibles para asignar la salida
-                if ($linea->id_inventario_repuesto_saliente) {
-                    $repuestosAsignar = Repuesto::where('id_inventario', $linea->id_inventario_repuesto_saliente)
-                        ->whereNull('id_orden_salida')
-                        ->where('propietario', true)
-                        ->limit($cantidad)
-                        ->get();
-
-                    foreach ($repuestosAsignar as $rep) {
-                        $costoTotal = (float) $rep->costo_total;
-                        $rep->update([
-                            'id_orden_salida'  => $orden->id_orden,
-                            'monto_venta_real' => $precioUnitario,
-                            'utilidad'         => round($precioUnitario - $costoTotal, 2),
-                        ]);
-                    }
-                }
             }
         }
     }

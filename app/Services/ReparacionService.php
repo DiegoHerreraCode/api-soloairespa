@@ -101,6 +101,17 @@ class ReparacionService
             if (empty($reparacion->id_admin_fecha_inicio) && !isset($data['id_admin_fecha_inicio'])) {
                 $data['id_admin_fecha_inicio'] = auth()->id();
             }
+
+            // Si la reparación pertenece a una orden, poner automáticamente la orden en 'en_proceso'
+            if (!empty($reparacion->id_orden)) {
+                $orden = Orden::find($reparacion->id_orden);
+                if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
+                    $orden->update([
+                        'estado_operativo' => OrdenEstadoOperativo::EN_PROCESO->value,
+                        'last_update'      => now(),
+                    ]);
+                }
+            }
         }
 
         // Si pasa a 'finalizada'
@@ -441,19 +452,37 @@ class ReparacionService
                         $porcentajeIva = (float) ($itemInventario->porcentaje_iva ?? round(($ivaLinea / $subtotalLinea) * 100, 2));
                     }
 
+                    // Grabar registro en detalles_ordenes con id_repuesto_saliente
                     DetalleOrden::create([
-                        'id_orden' => $orden->id_orden,
-                        'id_inventario_insumo_saliente' => null,
+                        'id_orden'                        => $orden->id_orden,
+                        'id_inventario_insumo_saliente'   => null,
                         'id_inventario_repuesto_saliente' => $repuestoAsociado ? $repuestoAsociado->id_inventario : null,
+                        'id_repuesto_saliente'            => $repuestoAsociado ? $repuestoAsociado->id_repuesto : null,
                         'id_inventario_repuesto_entrante' => null,
-                        'cantidad' => 1,
-                        'precio_unitario' => $subtotalLinea,
-                        'monto_tasacion' => 0.00,
-                        'monto_total_linea_sin_iva' => $subtotalLinea,
-                        'porcentaje_iva' => $porcentajeIva,
-                        'monto_iva' => $ivaLinea,
-                        'monto_total_linea_con_iva' => $totalLinea,
+                        'id_repuesto_entrante'            => null,
+                        'cantidad'                        => 1,
+                        'precio_unitario'                 => $subtotalLinea,
+                        'monto_tasacion'                  => 0.00,
+                        'monto_total_linea_sin_iva'       => $subtotalLinea,
+                        'porcentaje_iva'                  => $porcentajeIva,
+                        'monto_iva'                       => $ivaLinea,
+                        'monto_total_linea_con_iva'       => $totalLinea,
                     ]);
+
+                    // Asignar salida contable y física del repuesto reparado
+                    if ($repuestoAsociado) {
+                        $costoTotalRep = (float) $repuestoAsociado->costo_total;
+                        $repuestoAsociado->update([
+                            'id_orden_salida'  => $orden->id_orden,
+                            'monto_venta_real' => $subtotalLinea,
+                            'utilidad'         => round($subtotalLinea - $costoTotalRep, 2),
+                        ]);
+                    }
+
+                    // Descontar inventario del cliente (cantidad_total, cantidad_cliente) y registrar metricas historicas
+                    if ($itemInventario) {
+                        InventarioService::actualizarPorReparacionEntrega($itemInventario, 1, $subtotalLinea);
+                    }
 
                     if ($porcentajeIva > 0) {
                         $totalGravado += $subtotalLinea;

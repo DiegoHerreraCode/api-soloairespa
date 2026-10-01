@@ -16,7 +16,9 @@ class DetalleOrden extends ApiModel
         'id_orden',
         'id_inventario_insumo_saliente',
         'id_inventario_repuesto_saliente',
+        'id_repuesto_saliente',
         'id_inventario_repuesto_entrante',
+        'id_repuesto_entrante',
         'cantidad',
         'precio_unitario',
         'monto_tasacion',
@@ -36,13 +38,23 @@ class DetalleOrden extends ApiModel
         return $this->belongsTo(Inventario::class, 'id_inventario_insumo_saliente', 'id_inventario');
     }
 
-    public function repuestoSaliente()
+    public function repuestoSalienteInventario()
     {
         return $this->belongsTo(Inventario::class, 'id_inventario_repuesto_saliente', 'id_inventario');
     }
 
-    public function repuestoEntrante()
+    public function repuestoSaliente()
+    {
+        return $this->belongsTo(Repuesto::class, 'id_repuesto_saliente', 'id_repuesto');
+    }
+
+    public function repuestoEntranteInventario()
     {
         return $this->belongsTo(Inventario::class, 'id_inventario_repuesto_entrante', 'id_inventario');
+    }
+
+    public function repuestoEntrante()
+    {
+        return $this->belongsTo(Repuesto::class, 'id_repuesto_entrante', 'id_repuesto');
     }
 }
