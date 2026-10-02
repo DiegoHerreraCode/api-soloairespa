@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReparacionService;
+use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -61,6 +62,12 @@ class ReparacionController extends Controller
         ]);
 
         $data = $request->all();
+
+        if (empty($data['id_admin'])) {
+            $userId = auth()->id();
+            $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+            $data['id_admin'] = $admin ? $admin->id_admin : 1;
+        }
 
         $reparacion = ReparacionService::create($data);
         if (!$reparacion) {

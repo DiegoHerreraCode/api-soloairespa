@@ -7,4 +7,5 @@ enum ReparacionEstado: string
     case PENDIENTE = 'pendiente';
     case EN_PROCESO = 'en_proceso';
     case FINALIZADA = 'finalizada';
+    case ANULADA = 'anulada';
 }

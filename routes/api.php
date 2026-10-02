@@ -35,6 +35,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'getUser']);
 
+    // Endpoints específicos para Anulación
+    Route::patch('/ordenes/{id}/anular', [OrdenController::class, 'anular']);
+    Route::patch('/pagos-clientes/{id}/anular', [PagoClienteController::class, 'anular']);
+
     Route::apiResources([
         // Capa 1
         'admins'                        => AdminController::class,

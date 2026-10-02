@@ -6,6 +6,7 @@ use App\Models\PagoCliente;
 use App\Models\Orden;
 use App\Services\OrdenService;
 use App\Enums\OrdenEstadoAdmin;
+use App\Enums\PagoClienteEstado;
 use Illuminate\Support\Facades\DB;
 
 class PagoClienteService
@@ -58,7 +59,7 @@ class PagoClienteService
         // Actualizar saldo pendiente de la orden y su estado administrativo
         $orden = Orden::find($pago->id_orden);
         if ($orden) {
-            $totalPagado = (float) PagoCliente::where('id_orden', $orden->id_orden)->sum('monto');
+            $totalPagado = (float) PagoCliente::where('id_orden', $orden->id_orden)->where('estado', '!=', PagoClienteEstado::ANULADO->value)->sum('monto');
             $nuevoPendiente = max(0, (float) $orden->monto_total - $totalPagado);
 
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
@@ -89,7 +90,7 @@ class PagoClienteService
         // Recalcular saldo pendiente de la orden si se modificó el monto
         $orden = Orden::find($pago->id_orden);
         if ($orden) {
-            $totalPagado = (float) PagoCliente::where('id_orden', $orden->id_orden)->sum('monto');
+            $totalPagado = (float) PagoCliente::where('id_orden', $orden->id_orden)->where('estado', '!=', PagoClienteEstado::ANULADO->value)->sum('monto');
             $nuevoPendiente = max(0, (float) $orden->monto_total - $totalPagado);
 
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
@@ -137,5 +138,48 @@ class PagoClienteService
 
         DB::commit();
         return $pago;
+    }
+
+    public static function anular($id, array $data)
+    {
+        $pago = PagoCliente::find($id);
+        if (!$pago) {
+            return null;
+        }
+
+        $estadoStr = $pago->estado instanceof PagoClienteEstado ? $pago->estado->value : (string) $pago->estado;
+        if ($estadoStr === PagoClienteEstado::ANULADO->value) {
+            return false;
+        }
+
+        DB::beginTransaction();
+
+        $pago->update([
+            'estado'              => PagoClienteEstado::ANULADO->value,
+            'fecha_anulacion'     => now(),
+            'id_admin_anulacion'  => $data['id_admin_anulacion'] ?? auth()->id() ?? 1,
+            'motivo_anulacion'    => $data['motivo_anulacion'] ?? 'Anulación de pago',
+        ]);
+
+        // Recalcular saldo pendiente de la orden considerando únicamente pagos activos (no anulados)
+        $orden = Orden::find($pago->id_orden);
+        if ($orden) {
+            $totalPagado = (float) PagoCliente::where('id_orden', $orden->id_orden)
+                ->where('estado', '!=', PagoClienteEstado::ANULADO->value)
+                ->sum('monto');
+
+            $nuevoPendiente = max(0, (float) $orden->monto_total - $totalPagado);
+            $estadoAdmin = ($nuevoPendiente <= 0 && (float) $orden->monto_total > 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
+
+            $orden->update([
+                'monto_pendiente'       => round($nuevoPendiente, 2),
+                'estado_administrativo' => $estadoAdmin,
+                'last_update'           => now(),
+            ]);
+        }
+
+        DB::commit();
+
+        return $pago->fresh();
     }
 }

@@ -8,4 +8,5 @@ enum TallerEstado: string
     case EN_ESPERA = 'en_espera';
     case EN_PROCESO = 'en_proceso';
     case FINALIZADO = 'finalizado';
+    case ANULADO = 'anulado';
 }

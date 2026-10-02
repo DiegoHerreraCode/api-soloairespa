@@ -11,6 +11,13 @@ use App\Enums\RepuestoEstado;
 use App\Enums\OrdenEstadoOperativo;
 use App\Enums\OrdenEstadoAdmin;
 use App\Services\InventarioService;
+use App\Enums\TallerEstado;
+use App\Enums\ReparacionEstado;
+use App\Enums\PagoClienteEstado;
+use App\Models\ReparacionServicioTaller;
+use App\Models\ReparacionInsumo;
+use App\Models\Reparacion;
+use App\Models\PagoCliente;
 use Illuminate\Support\Facades\DB;
 
 class OrdenService
@@ -328,25 +335,9 @@ class OrdenService
                 }
             }
 
-            if ($itemSaliente) {
-                InventarioService::actualizarPorVenta($itemSaliente, 1, $precioUnitario);
-            }
-
-            // 2. REPUESTO ENTRANTE: pasa a ser propiedad del taller
-            // Si el item entrante es el mismo item saliente, refrescar el modelo para tener el stock ya descontado
-            if ($itemEntrante && $itemSaliente && $itemEntrante->id_inventario === $itemSaliente->id_inventario) {
-                $itemEntrante->refresh();
-            }
-
+            // 2. REPUESTO ENTRANTE: registrar repuesto usado
             $idRepuestoEntranteCreado = null;
             if ($itemEntrante) {
-                $nuevoTotal = (int) $itemEntrante->cantidad_total + 1;
-                $nuevoPropio = (int) $itemEntrante->cantidad_propia + 1;
-                $itemEntrante->update([
-                    'cantidad_total'  => $nuevoTotal,
-                    'cantidad_propia' => $nuevoPropio,
-                ]);
-
                 $repEntrante = Repuesto::create([
                     'id_inventario'     => $itemEntrante->id_inventario,
                     'serial'            => $linea['serial_entrante'] ?? null,
@@ -359,7 +350,8 @@ class OrdenService
                 $idRepuestoEntranteCreado = $repEntrante->id_repuesto;
             }
 
-            // 3. Crear registro en detalles_ordenes con id_repuesto_saliente e id_repuesto_entrante
+            // 3. CREAR REGISTRO EN detalles_ordenes PRIMERO
+            // Esto garantiza que el detalle ya exista en base de datos para el cálculo ponderado de ventas
             DetalleOrden::create([
                 'id_orden'                        => $orden->id_orden,
                 'id_inventario_insumo_saliente'   => null,
@@ -375,6 +367,22 @@ class OrdenService
                 'monto_iva'                       => $ivaLinea,
                 'monto_total_linea_con_iva'       => $totalLinea,
             ]);
+
+            // 4. ACTUALIZAR MÉTRICAS DE INVENTARIO:
+            // Salida de la venta (actualiza métricas de venta ponderadas y descuenta stock propio)
+            if ($itemSaliente) {
+                InventarioService::actualizarPorVenta($itemSaliente, 1, $precioUnitario);
+            }
+
+            // Si el ítem entrante es el mismo saliente, refrescar para tomar el stock recién decrementado
+            if ($itemEntrante && $itemSaliente && $itemEntrante->id_inventario === $itemSaliente->id_inventario) {
+                $itemEntrante->refresh();
+            }
+
+            // Entrada por tasación (actualiza métricas de adquisición/compra de usado y suma stock propio)
+            if ($itemEntrante) {
+                InventarioService::actualizarPorCompra($itemEntrante, 1, $montoTasacion);
+            }
 
             if ($porcentajeIva > 0) {
                 $totalGravado += $subtotalLinea;
@@ -420,5 +428,208 @@ class OrdenService
                 ]);
             }
         }
+    }
+
+    /**
+     * Anula una orden (Venta, Recambio o Reparación):
+     * - Valida que no tenga pagos activos asociados.
+     * - Deshace salida/entrada física y contable.
+     * - Marca id_orden_salida = id_orden en repuestos que ingresaron por clientes (trazabilidad inmutable).
+     * - Devuelve insumos no gastados al inventario según el array opcional o el 100% por defecto.
+     * - Anula reparaciones y servicios de taller vinculados.
+     * - Recalcula métricas completas en inventario (InventarioService::recalcularMetricasCompletas).
+     */
+    public static function anular($id, array $data)
+    {
+        $orden = Orden::find($id);
+        if (!$orden) {
+            return null;
+        }
+
+        $estadoOperativoStr = $orden->estado_operativo instanceof OrdenEstadoOperativo
+            ? $orden->estado_operativo->value
+            : (string) $orden->estado_operativo;
+
+        if ($estadoOperativoStr === OrdenEstadoOperativo::ANULADA->value) {
+            return 'La orden ya se encuentra anulada';
+        }
+
+        // 1. REGLA: No permitir anular si existen pagos asociados que no estén anulados
+        $tienePagosActivos = PagoCliente::where('id_orden', $orden->id_orden)
+            ->where('estado', '!=', PagoClienteEstado::ANULADO->value)
+            ->exists();
+
+        if ($tienePagosActivos) {
+            return 'No se puede anular la orden porque tiene pagos activos asociados. Primero debe anular los pagos correspondientes.';
+        }
+
+        DB::beginTransaction();
+
+        $tipoOrden = TipoOrden::find($orden->id_tipo_orden);
+        $nombreTipo = $tipoOrden ? strtolower(trim($tipoOrden->nombre)) : '';
+
+        $inventariosAfectados = [];
+
+        // 2. REVERTIR SEGÚN EL TIPO DE ORDEN
+        if ($nombreTipo === 'venta') {
+            $detalles = DetalleOrden::where('id_orden', $orden->id_orden)->get();
+
+            foreach ($detalles as $det) {
+                // A. Insumos vendidos: devolver stock propio al inventario
+                if (!empty($det->id_inventario_insumo_saliente)) {
+                    $item = Inventario::find($det->id_inventario_insumo_saliente);
+                    if ($item) {
+                        $item->update([
+                            'cantidad_total'  => (int) $item->cantidad_total + (int) $det->cantidad,
+                            'cantidad_propia' => (int) $item->cantidad_propia + (int) $det->cantidad,
+                        ]);
+                        $inventariosAfectados[$item->id_inventario] = true;
+                    }
+                }
+
+                // B. Repuestos propios vendidos: reintegrar al taller disponibles
+                if (!empty($det->id_repuesto_saliente)) {
+                    $repuesto = Repuesto::find($det->id_repuesto_saliente);
+                    if ($repuesto) {
+                        $repuesto->update([
+                            'id_orden_salida'  => null,
+                            'monto_venta_real' => null,
+                            'utilidad'         => null,
+                        ]);
+                        $item = Inventario::find($repuesto->id_inventario);
+                        if ($item) {
+                            $item->update([
+                                'cantidad_total'  => (int) $item->cantidad_total + 1,
+                                'cantidad_propia' => (int) $item->cantidad_propia + 1,
+                            ]);
+                            $inventariosAfectados[$item->id_inventario] = true;
+                        }
+                    }
+                }
+            }
+        } elseif ($nombreTipo === 'recambio') {
+            $detalles = DetalleOrden::where('id_orden', $orden->id_orden)->get();
+
+            foreach ($detalles as $det) {
+                // A. Repuesto propio que salió: vuelve al taller disponible
+                if (!empty($det->id_repuesto_saliente)) {
+                    $repSaliente = Repuesto::find($det->id_repuesto_saliente);
+                    if ($repSaliente) {
+                        $repSaliente->update([
+                            'id_orden_salida'  => null,
+                            'monto_venta_real' => null,
+                            'utilidad'         => null,
+                        ]);
+                        $itemSaliente = Inventario::find($repSaliente->id_inventario);
+                        if ($itemSaliente) {
+                            $itemSaliente->update([
+                                'cantidad_total'  => (int) $itemSaliente->cantidad_total + 1,
+                                'cantidad_propia' => (int) $itemSaliente->cantidad_propia + 1,
+                            ]);
+                            $inventariosAfectados[$itemSaliente->id_inventario] = true;
+                        }
+                    }
+                }
+
+                // B. Repuesto entrante del cliente: se mantiene en repuestos con id_orden_salida = orden.id_orden y se descuenta del inventario del taller
+                if (!empty($det->id_repuesto_entrante)) {
+                    $repEntrante = Repuesto::find($det->id_repuesto_entrante);
+                    if ($repEntrante) {
+                        $repEntrante->update([
+                            'id_orden_salida'  => $orden->id_orden,
+                            'monto_venta_real' => 0.00,
+                            'utilidad'         => 0.00,
+                        ]);
+                        $itemEntrante = Inventario::find($repEntrante->id_inventario);
+                        if ($itemEntrante) {
+                            $itemEntrante->update([
+                                'cantidad_total'  => max(0, (int) $itemEntrante->cantidad_total - 1),
+                                'cantidad_propia' => max(0, (int) $itemEntrante->cantidad_propia - 1),
+                            ]);
+                            $inventariosAfectados[$itemEntrante->id_inventario] = true;
+                        }
+                    }
+                }
+            }
+        } elseif ($nombreTipo === 'reparacion') {
+            // A. Repuestos de cliente que ingresaron: id_orden_salida = id_orden
+            $repuestosCliente = Repuesto::where('id_orden_entrada', $orden->id_orden)->get();
+            foreach ($repuestosCliente as $repCli) {
+                $repCli->update([
+                    'id_orden_salida'  => $orden->id_orden,
+                    'monto_venta_real' => 0.00,
+                    'utilidad'         => 0.00,
+                ]);
+
+                // Si la orden aún no estaba finalizada, descontar de cantidad_total y cantidad_cliente porque aún figuraban en taller
+                if ($estadoOperativoStr !== OrdenEstadoOperativo::FINALIZADA->value) {
+                    $itemCli = Inventario::find($repCli->id_inventario);
+                    if ($itemCli) {
+                        $itemCli->update([
+                            'cantidad_total'   => max(0, (int) $itemCli->cantidad_total - 1),
+                            'cantidad_cliente' => max(0, (int) $itemCli->cantidad_cliente - 1),
+                        ]);
+                        $inventariosAfectados[$itemCli->id_inventario] = true;
+                    }
+                } else {
+                    $inventariosAfectados[$repCli->id_inventario] = true;
+                }
+            }
+
+            // B. Revertir insumos de las reparaciones de esta orden
+            $reparaciones = Reparacion::where('id_orden', $orden->id_orden)->get();
+            $insumosPayload = collect($data['insumos_devueltos'] ?? [])->keyBy('id_reparacion_insumo');
+
+            foreach ($reparaciones as $rep) {
+                $insumosRep = ReparacionInsumo::where('id_reparacion', $rep->id_reparacion)->get();
+                foreach ($insumosRep as $insumo) {
+                    $cantDevolver = (int) $insumo->cantidad; // Por defecto el 100%
+
+                    // Si el admin especificó cantidades no gastadas explícitas
+                    if ($insumosPayload->has($insumo->id_reparacion_insumo)) {
+                        $cantDevolver = (int) $insumosPayload[$insumo->id_reparacion_insumo]['cantidad_no_gastada'];
+                    }
+
+                    if ($cantDevolver > 0) {
+                        $itemInsumo = Inventario::find($insumo->id_inventario);
+                        if ($itemInsumo) {
+                            $itemInsumo->update([
+                                'cantidad_total'  => (int) $itemInsumo->cantidad_total + $cantDevolver,
+                                'cantidad_propia' => (int) $itemInsumo->cantidad_propia + $cantDevolver,
+                            ]);
+                            $inventariosAfectados[$itemInsumo->id_inventario] = true;
+                        }
+                    }
+                }
+
+                // C. Marcar reparaciones como anuladas
+                $rep->update([
+                    'estado' => ReparacionEstado::ANULADA->value,
+                ]);
+
+                // D. Marcar servicios de taller como anulados
+                ReparacionServicioTaller::where('id_reparacion', $rep->id_reparacion)->update([
+                    'estado' => TallerEstado::ANULADO->value,
+                ]);
+            }
+        }
+
+        // 3. ACTUALIZAR CABECERA DE LA ORDEN
+        $orden->update([
+            'estado_operativo'   => OrdenEstadoOperativo::ANULADA->value,
+            'fecha_anulacion'    => now(),
+            'id_admin_anulacion' => $data['id_admin_anulacion'] ?? auth()->id() ?? 1,
+            'motivo_anulacion'   => $data['motivo_anulacion'] ?? 'Anulación de orden',
+            'last_update'        => now(),
+        ]);
+
+        // 4. RECALCULAR MÉTRICAS ECONÓMICAS COMPLETAS EN INVENTARIOS AFECTADOS
+        foreach (array_keys($inventariosAfectados) as $idInv) {
+            InventarioService::recalcularMetricasCompletas((int) $idInv);
+        }
+
+        DB::commit();
+
+        return $orden->fresh();
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\PagoClienteService;
+use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -95,5 +96,25 @@ class PagoClienteController extends Controller
         }
 
         return $this->successResponse($pago, 'Pago eliminado correctamente');
+    }
+    public function anular(Request $request, $id): JsonResponse
+    {
+        $request->validate([
+            'motivo_anulacion' => 'required|string|max:250',
+        ]);
+
+        $data = $request->all();
+
+        // Resolver id_admin_anulacion automáticamente desde el token autenticado
+        $userId = auth()->id();
+        $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+        $data['id_admin_anulacion'] = $admin ? $admin->id_admin : ($data['id_admin_anulacion'] ?? 1);
+
+        $resultado = PagoClienteService::anular($id, $data);
+        if ($resultado === false) {
+            return $this->errorResponse('El pago ya se encuentra anulado o no existe', 400);
+        }
+
+        return $this->successResponse($resultado, 'Pago anulado correctamente');
     }
 }

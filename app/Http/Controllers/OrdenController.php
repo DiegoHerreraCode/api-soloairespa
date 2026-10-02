@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\OrdenService;
+use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,7 +24,7 @@ class OrdenController extends Controller
             // Cabecera
             'id_cliente'               => 'required|integer|exists:clientes,id_cliente',
             'id_tipo_orden'            => 'required|integer|exists:tipos_ordenes,id_tipo_orden',
-            'id_admin'                 => 'required|integer|exists:admins,id_admin',
+            'id_admin'                 => 'nullable|integer|exists:admins,id_admin',
             'fecha_creacion'           => 'nullable|date',
             'monto_total_gravado'      => 'nullable|numeric',
             'monto_total_exento'       => 'nullable|numeric',
@@ -59,6 +60,12 @@ class OrdenController extends Controller
         ]);
 
         $data = $request->all();
+
+        if (empty($data['id_admin'])) {
+            $userId = auth()->id();
+            $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+            $data['id_admin'] = $admin ? $admin->id_admin : 1;
+        }
 
         $orden = OrdenService::create($data);
         if (!$orden) {
@@ -132,5 +139,33 @@ class OrdenController extends Controller
         }
 
         return $this->successResponse($orden, 'Orden eliminada correctamente');
+    }
+    public function anular(Request $request, $id): JsonResponse
+    {
+        $request->validate([
+            'motivo_anulacion'   => 'required|string|max:250',
+            'insumos_devueltos'  => 'nullable|array',
+            'insumos_devueltos.*.id_reparacion_insumo' => 'required_with:insumos_devueltos|integer|exists:reparaciones_insumos,id_reparacion_insumo',
+            'insumos_devueltos.*.cantidad_no_gastada'  => 'required_with:insumos_devueltos|integer|min:0',
+        ]);
+
+        $data = $request->all();
+
+        // Resolver id_admin_anulacion automáticamente desde el token autenticado
+        $userId = auth()->id();
+        $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+        $data['id_admin_anulacion'] = $admin ? $admin->id_admin : ($data['id_admin_anulacion'] ?? 1);
+
+        $resultado = OrdenService::anular($id, $data);
+
+        if (is_string($resultado)) {
+            return $this->errorResponse($resultado, 422);
+        }
+
+        if (!$resultado) {
+            return $this->errorResponse('Orden no encontrada o no se pudo anular', 404);
+        }
+
+        return $this->successResponse($resultado, 'Orden anulada correctamente');
     }
 }

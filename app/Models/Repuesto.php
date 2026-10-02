@@ -39,10 +39,21 @@ class Repuesto extends ApiModel
         return $this->belongsTo(Inventario::class, 'id_inventario', 'id_inventario');
     }
 
+    public function ordenEntrada()
+    {
+        return $this->belongsTo(Orden::class, 'id_orden_entrada', 'id_orden');
+    }
+
+    public function ordenSalida()
+    {
+        return $this->belongsTo(Orden::class, 'id_orden_salida', 'id_orden');
+    }
+
     public function detalleCompra()
     {
         return $this->belongsTo(DetalleCompra::class, 'id_detalle_compra', 'id_detalle_compra');
     }
+
     public function reparaciones()
     {
         return $this->hasMany(Reparacion::class, 'id_repuesto', 'id_repuesto');
