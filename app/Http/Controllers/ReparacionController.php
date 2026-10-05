@@ -7,8 +7,28 @@ use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Class ReparacionController
+ *
+ * Controlador RESTful encargado de gestionar los procesos de diagnóstico, reparación y acondicionamiento
+ * de repuestos en el taller técnico.
+ * Coordina la cabecera del trabajo, los insumos consumidos, las actividades de servicio y el recálculo
+ * acumulado de costos directos, márgenes y precios con IVA.
+ */
 class ReparacionController extends Controller
 {
+    /**
+     * Retorna el listado completo de reparaciones registradas.
+     *
+     * Lógica:
+     * 1. Consulta la lista total mediante ReparacionService::getAll().
+     * 2. Devuelve respuesta JSON con status 200 y mensaje correspondiente.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "reparaciones";
+     *
+     * @return JsonResponse Lista de reparaciones.
+     */
     public function index(): JsonResponse
     {
         $reparaciones = ReparacionService::getAll();
@@ -18,6 +38,28 @@ class ReparacionController extends Controller
         );
     }
 
+    /**
+     * Registra una nueva reparación con sus insumos y servicios iniciales.
+     *
+     * Lógica:
+     * 1. Valida el repuesto a reparar, orden vinculada (opcional), fechas, administradores y estados.
+     * 2. Valida los arreglos opcionales de insumos (cantidades, inventario de origen) y servicios de taller.
+     * 3. Resuelve el id_admin a partir de la sesión autenticada si no fue especificado.
+     * 4. Invoca ReparacionService::create($data), que inserta la reparación, descuenta insumos de stock
+     *    y consolida los costos totales.
+     * 5. Retorna la reparación creada con código HTTP 201.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- BEGIN;
+     * -- INSERT INTO "reparaciones" (...) VALUES (...);
+     * -- INSERT INTO "reparaciones_insumos" (...) VALUES (...);
+     * -- UPDATE "inventario" SET "cantidad_propia" = cantidad_propia - :cant ...;
+     * -- INSERT INTO "reparaciones_servicios_taller" (...) VALUES (...);
+     * -- COMMIT;
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         $request->validate([
@@ -65,6 +107,8 @@ class ReparacionController extends Controller
 
         if (empty($data['id_admin'])) {
             $userId = auth()->id();
+            // Consulta SQL Raw equivalente:
+            // SELECT * FROM "admins" WHERE "id_user" = :userId LIMIT 1;
             $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
             $data['id_admin'] = $admin ? $admin->id_admin : 1;
         }
@@ -77,6 +121,19 @@ class ReparacionController extends Controller
         return $this->successResponse($reparacion, 'Reparación creada exitosamente', 201);
     }
 
+    /**
+     * Consulta y devuelve la información de una reparación con sus insumos y servicios asociados.
+     *
+     * Lógica:
+     * 1. Busca la reparación mediante ReparacionService::getOne($id).
+     * 2. Si no existe retorna 404, de lo contrario entrega el recurso con 200 OK.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "reparaciones" WHERE "id_reparacion" = :id LIMIT 1;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function show($id): JsonResponse
     {
         $reparacion = ReparacionService::getOne($id);
@@ -87,6 +144,23 @@ class ReparacionController extends Controller
         return $this->successResponse($reparacion, 'Reparación obtenida correctamente');
     }
 
+    /**
+     * Actualiza la información, estado o componentes (insumos/servicios) de una reparación.
+     *
+     * Lógica:
+     * 1. Valida campos de cabecera y arreglos de sincronización opcionales de insumos y servicios.
+     * 2. Comprueba que al menos un campo modificable haya sido enviado.
+     * 3. Invoca ReparacionService::update($id, $data), sincronizando costos e impactando en inventario/orden si finaliza.
+     * 4. Retorna la reparación actualizada con HTTP 200.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "reparaciones" WHERE "id_reparacion" = :id LIMIT 1;
+     * -- UPDATE "reparaciones" SET "estado" = 'finalizada', "fecha_fin" = NOW() ... WHERE "id_reparacion" = :id;
+     *
+     * @param Request $request
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
@@ -159,6 +233,20 @@ class ReparacionController extends Controller
         return $this->successResponse($reparacion, 'Reparación actualizada exitosamente');
     }
 
+    /**
+     * Elimina una reparación del sistema revirtiendo los insumos y servicios cargados.
+     *
+     * Lógica:
+     * 1. Invoca ReparacionService::delete($id).
+     * 2. Si no se encuentra retorna 404, de lo contrario devuelve éxito con código 200.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "reparaciones" WHERE "id_reparacion" = :id LIMIT 1;
+     * -- DELETE FROM "reparaciones" WHERE "id_reparacion" = :id;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function destroy($id): JsonResponse
     {
         $reparacion = ReparacionService::delete($id);

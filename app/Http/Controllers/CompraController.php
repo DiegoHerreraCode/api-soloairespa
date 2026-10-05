@@ -6,8 +6,27 @@ use App\Services\CompraService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Class CompraController
+ *
+ * Controlador RESTful encargado de la gestión de compras a proveedores.
+ * Valida la cabecera de la factura/boleta, las líneas de detalle adquiridas,
+ * los seriales ingresados y el plan o cronograma de pagos asociado.
+ */
 class CompraController extends Controller
 {
+    /**
+     * Retorna todas las compras registradas con sus relaciones.
+     *
+     * Lógica:
+     * 1. Consulta la colección completa mediante CompraService::getAll().
+     * 2. Retorna respuesta estándar JSON con HTTP 200.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "compras";
+     *
+     * @return JsonResponse Lista de compras.
+     */
     public function index(): JsonResponse
     {
         $compras = CompraService::getAll();
@@ -17,6 +36,29 @@ class CompraController extends Controller
         );
     }
 
+    /**
+     * Registra una compra completa dentro de una transacción de base de datos.
+     *
+     * Lógica:
+     * 1. Valida cabecera (proveedor, admin, factura, montos totales, tipo de pago contado/crédito).
+     * 2. Valida arreglo de detalles (id_inventario, cantidad, costo_unitario) y seriales opcionales.
+     * 3. Valida arreglo de pagos acordados (montos, fechas, estados).
+     * 4. Envía toda la estructura a CompraService::create($data), que crea la compra, los detalles,
+     *    los repuestos/equipos por serial, los pagos y recalcula existencias y métricas en inventario.
+     * 5. Retorna la compra creada con HTTP 201.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- BEGIN;
+     * -- INSERT INTO "compras" (...) VALUES (...);
+     * -- INSERT INTO "detalles_compras" (...) VALUES (...);
+     * -- INSERT INTO "repuestos" / "equipos" (...) VALUES (...);
+     * -- INSERT INTO "pagos_compras" (...) VALUES (...);
+     * -- Recálculo de inventario (UPDATE "inventario" ...);
+     * -- COMMIT;
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         $request->validate([
@@ -71,6 +113,19 @@ class CompraController extends Controller
         return $this->successResponse($compra, 'Compra creada exitosamente', 201);
     }
 
+    /**
+     * Consulta y devuelve la información de una compra por su ID con sus detalles y pagos.
+     *
+     * Lógica:
+     * 1. Busca la compra mediante CompraService::getOne($id).
+     * 2. Si no existe retorna 404, de lo contrario entrega el recurso con 200 OK.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "compras" WHERE "id_compra" = :id LIMIT 1;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function show($id): JsonResponse
     {
         $compra = CompraService::getOne($id);
@@ -81,6 +136,22 @@ class CompraController extends Controller
         return $this->successResponse($compra, 'Compra obtenida correctamente');
     }
 
+    /**
+     * Actualiza el estado administrativo o el saldo pendiente de una compra.
+     *
+     * Lógica:
+     * 1. Verifica que se proporcione 'estado' o 'monto_pendiente'.
+     * 2. Valida los valores recibidos.
+     * 3. Invoca CompraService::update($id, $data) y responde con el registro actualizado.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "compras" WHERE "id_compra" = :id LIMIT 1;
+     * -- UPDATE "compras" SET "estado" = '...', "monto_pendiente" = ... WHERE "id_compra" = :id;
+     *
+     * @param Request $request
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function update(Request $request, $id): JsonResponse
     {
         // Solo permitimos modificar estado y monto_pendiente
@@ -104,6 +175,21 @@ class CompraController extends Controller
         return $this->successResponse($compra, 'Compra actualizada exitosamente');
     }
 
+    /**
+     * Elimina una compra y sus registros dependientes del sistema.
+     *
+     * Lógica:
+     * 1. Llama a CompraService::delete($id).
+     * 2. Si la compra no existe devuelve error 404.
+     * 3. Retorna mensaje de confirmación de eliminación exitosa.
+     *
+     * Consultas SQL ejecutadas internamente vía Eloquent:
+     * -- SELECT * FROM "compras" WHERE "id_compra" = :id LIMIT 1;
+     * -- DELETE FROM "compras" WHERE "id_compra" = :id;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function destroy($id): JsonResponse
     {
         $compra = CompraService::delete($id);

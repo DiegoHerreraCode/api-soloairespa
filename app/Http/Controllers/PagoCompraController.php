@@ -6,8 +6,26 @@ use App\Services\PagoCompraService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Class PagoCompraController
+ *
+ * Controlador RESTful encargado de gestionar y actualizar las cuotas o pagos realizados
+ * a los proveedores por compras registradas previamente.
+ */
 class PagoCompraController extends Controller
 {
+    /**
+     * Retorna el listado completo de pagos de compras registrados.
+     *
+     * Lógica:
+     * 1. Consulta la colección de pagos mediante PagoCompraService::getAll().
+     * 2. Retorna respuesta estándar JSON con código 200.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "pagos_compras";
+     *
+     * @return JsonResponse Lista de pagos a proveedores.
+     */
     public function index(): JsonResponse
     {
         $pagos = PagoCompraService::getAll();
@@ -17,12 +35,35 @@ class PagoCompraController extends Controller
         );
     }
 
+    /**
+     * Bloquea la creación directa de pagos huérfanos.
+     *
+     * Lógica:
+     * 1. Los pagos a proveedores nacen acoplados al registro inicial de la compra en CompraController::store().
+     * 2. Retorna error 405 Method Not Allowed.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         // La creación de pagos de compra se gestiona exclusivamente al registrar la compra
         return $this->errorResponse('Los pagos de compra se generan automáticamente al registrar la compra', 405);
     }
 
+    /**
+     * Consulta y entrega los datos de un pago a compra específico por su ID.
+     *
+     * Lógica:
+     * 1. Busca el pago mediante PagoCompraService::getOne($id).
+     * 2. Si no existe devuelve 404, de lo contrario entrega el recurso con 200 OK.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "pagos_compras" WHERE "id_pago_compra" = :id LIMIT 1;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function show($id): JsonResponse
     {
         $pago = PagoCompraService::getOne($id);
@@ -33,6 +74,25 @@ class PagoCompraController extends Controller
         return $this->successResponse($pago, 'Pago obtenido correctamente');
     }
 
+    /**
+     * Actualiza la información o estado de abono de un pago a proveedor.
+     *
+     * Lógica:
+     * 1. Valida los campos de pago (monto, fechas, método, referencia, comprobante, estado).
+     * 2. Comprueba que al menos un campo haya sido provisto para actualizar.
+     * 3. Invoca PagoCompraService::update($id, $data) que actualiza el pago y sincroniza
+     *    el saldo 'monto_pendiente' y el estado de la compra padre.
+     * 4. Retorna el pago actualizado con 200 OK.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "pagos_compras" WHERE "id_pago_compra" = :id LIMIT 1;
+     * -- UPDATE "pagos_compras" SET "estado" = 'realizado', "fecha_pago" = NOW() WHERE "id_pago_compra" = :id;
+     * -- UPDATE "compras" SET "monto_pendiente" = ... WHERE "id_compra" = :id_compra;
+     *
+     * @param Request $request
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
@@ -72,6 +132,12 @@ class PagoCompraController extends Controller
         return $this->successResponse($pago, 'Pago a compra actualizado correctamente');
     }
 
+    /**
+     * Bloquea la eliminación aislada de cuotas de compras.
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function destroy($id): JsonResponse
     {
         // No se permite eliminar pagos de compras aislados

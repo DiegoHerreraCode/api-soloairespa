@@ -8,8 +8,35 @@ use App\Services\MailerService;
 use App\Services\AdminService;
 use Illuminate\Support\Facades\Hash;
 
+/**
+ * Class AuthController
+ *
+ * Controlador encargado de la autenticación, emisión/revocación de tokens Sanctum
+ * y el flujo de recuperación de contraseñas por correo electrónico.
+ */
 class AuthController extends Controller
 {
+    /**
+     * Registra un nuevo usuario en el sistema junto a su perfil de administrador.
+     *
+     * Lógica:
+     * 1. Valida nombre, correo único, contraseña segura con regex, RUT y datos de contacto.
+     * 2. Delega la creación del usuario en UserService::store($data) (hashea password y genera ID).
+     * 3. Despacha correo electrónico de bienvenida mediante MailerService::enviarCorreo.
+     * 4. Asocia y crea el perfil de Admin mediante AdminService::create.
+     * 5. Retorna respuesta JSON con los datos del administrador creado.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- Validación unicidad:
+     * -- SELECT count(*) FROM "users" WHERE "email" = '...' LIMIT 1;
+     * -- SELECT count(*) FROM "admins" WHERE "rut" = '...' LIMIT 1;
+     * -- Creación usuario y admin:
+     * -- INSERT INTO "users" ("id", "name", "email", "password", ...) VALUES (...);
+     * -- INSERT INTO "admins" ("id_admin", "id_user", "nombre", "rut", ...) VALUES (...);
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function register(Request $request)
     {
         $request->validate([
@@ -51,6 +78,23 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Autentica credenciales de usuario y emite un token de acceso personal (Sanctum).
+     *
+     * Lógica:
+     * 1. Valida la presencia de email y password.
+     * 2. Busca al usuario mediante UserService::getOne($request->email).
+     * 3. Comprueba el hash de la contraseña con Hash::check.
+     * 4. Revoca tokens anteriores para garantizar sesión única y emite nuevo token Bearer.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
+     * -- DELETE FROM "personal_access_tokens" WHERE "tokenable_id" = :id;
+     * -- INSERT INTO "personal_access_tokens" (...) VALUES (...);
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function login(Request $request)
     {
         $request->validate([
@@ -82,6 +126,18 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Cierra la sesión revocando los tokens de acceso del usuario autenticado.
+     *
+     * Lógica:
+     * 1. Elimina todos los tokens activos asociados al usuario autenticado.
+     *
+     * Consulta SQL ejecutada:
+     * -- DELETE FROM "personal_access_tokens" WHERE "tokenable_id" = :id;
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function logout(Request $request)
     {
         $request->user()->tokens()->delete();
@@ -91,6 +147,12 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Retorna la información del usuario autenticado actual.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function getUser(Request $request)
     {
         $userRequest = $request->user();
@@ -101,6 +163,21 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Genera y envía un código de verificación de 6 dígitos para recuperación de contraseña.
+     *
+     * Lógica:
+     * 1. Busca al usuario por su correo electrónico.
+     * 2. Genera un número aleatorio de 6 dígitos con str_pad.
+     * 3. Envía el código por correo y lo almacena temporalmente en el campo 'codigo_verificacion'.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
+     * -- UPDATE "users" SET "codigo_verificacion" = :codigo, "updated_at" = NOW() WHERE "id" = :id;
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function forgotPassword(Request $request)
     {
         $request->validate([
@@ -123,7 +200,7 @@ class AuthController extends Controller
             'bcc' => [],
         ], 'Codigo de verificacion', 'emails.password_code', ['nombre' => $user->name, 'codigo' => $codigo]);
 
-        //guardar el codigo en la base de datos
+        // Guardar el código en la base de datos
         $user->codigo_verificacion = $codigo;
         $user->save();
 
@@ -132,6 +209,19 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Valida la concordancia del código de verificación enviado por el usuario.
+     *
+     * Lógica:
+     * 1. Busca al usuario y compara el código recibido con el almacenado.
+     * 2. Retorna error 401 si no coincide, o mensaje de confirmación si es válido.
+     *
+     * Consulta SQL ejecutada:
+     * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function verifyCode(Request $request)
     {
         $request->validate([
@@ -152,6 +242,21 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Restablece la contraseña del usuario tras verificar sus requerimientos de seguridad.
+     *
+     * Lógica:
+     * 1. Valida la nueva contraseña según las políticas de longitud y complejidad.
+     * 2. Hashea la nueva contraseña con Hash::make y limpia el campo codigo_verificacion.
+     * 3. Envía notificación por correo informando del cambio exitoso.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
+     * -- UPDATE "users" SET "password" = :hash, "codigo_verificacion" = NULL, "updated_at" = NOW() WHERE "id" = :id;
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
     public function resetPassword(Request $request)
     {
         $request->validate([
@@ -191,5 +296,4 @@ class AuthController extends Controller
             'message' => 'Contraseña actualizada exitosamente',
         ]);
     }
-
 }

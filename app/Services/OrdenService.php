@@ -20,18 +20,47 @@ use App\Models\Reparacion;
 use App\Models\PagoCliente;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Service OrdenService
+ * 
+ * Orquestador principal de operaciones comerciales y técnicas con clientes:
+ * - Venta de insumos y repuestos serializados.
+ * - Recambio (entrega de repuesto bueno del taller y tasación de repuesto entrante de cliente).
+ * - Recepción de piezas para reparación en taller.
+ * - Anulación completa y coherente de órdenes (reintegración de stock físico, reversión contable,
+ *   auditoría y recálculo de métricas económicas en la tabla inventario).
+ */
 class OrdenService
 {
+    /**
+     * Retorna todas las órdenes comerciales y de trabajo.
+     * Consulta SQL Raw:
+     * SELECT * FROM ordenes;
+     */
     public static function getAll()
     {
         return Orden::get();
     }
 
+    /**
+     * Obtiene una orden por su clave primaria.
+     * Consulta SQL Raw:
+     * SELECT * FROM ordenes WHERE id_orden = $id LIMIT 1;
+     */
     public static function getOne($id)
     {
         return Orden::find($id);
     }
 
+    /**
+     * Crea una orden en el sistema:
+     * 1. Determina los estados operativos iniciales (Ventas y Recambios nacen directamente 'finalizada'; Reparaciones nacen 'en_espera').
+     * 2. Inserta la cabecera en ordenes.
+     * 3. Ejecuta el procesador específico según el tipo de orden (procesarVenta, procesarRecambio o procesarRecepcionReparacion).
+     *
+     * Consulta SQL Raw:
+     * INSERT INTO ordenes (id_cliente, id_tipo_orden, estado_operativo, estado_administrativo, ...) VALUES (...);
+     */
     public static function create($data)
     {
         DB::beginTransaction();
@@ -43,7 +72,7 @@ class OrdenService
         $tipoOrden = TipoOrden::find($data['id_tipo_orden']);
         $nombreTipo = $tipoOrden ? strtolower(trim($tipoOrden->nombre)) : '';
 
-        // 1. Estados iniciales por defecto de la orden
+        // 1. Estados iniciales por defecto de la orden:
         // Ventas y Recambios nacen directamente como "finalizada" operativamente
         if (in_array($nombreTipo, ['venta', 'recambio'])) {
             $data['estado_operativo'] = OrdenEstadoOperativo::FINALIZADA->value;
@@ -52,7 +81,8 @@ class OrdenService
         }
 
         $data['estado_administrativo'] = $data['estado_administrativo'] ?? OrdenEstadoAdmin::PENDIENTE_PAGO->value;
-                if (!empty($data['fecha_creacion'])) {
+
+        if (!empty($data['fecha_creacion'])) {
             $data['fecha_creacion'] = strlen($data['fecha_creacion']) === 10
                 ? $data['fecha_creacion'] . ' ' . now()->format('H:i:s')
                 : $data['fecha_creacion'];
@@ -65,11 +95,11 @@ class OrdenService
                 ? $data['fecha_entrega_reparacion'] . ' ' . now()->format('H:i:s')
                 : $data['fecha_entrega_reparacion'];
         }
-        $data['last_update']           = now();
+        $data['last_update'] = now();
 
         $orden = Orden::create($data);
 
-        // 2. Procesar segÃºn el tipo de orden
+        // 2. Procesar según el tipo de orden
         if ($nombreTipo === 'venta') {
             self::procesarVenta($orden, $detalles);
         } elseif ($nombreTipo === 'recambio') {
@@ -83,6 +113,11 @@ class OrdenService
         return $orden->fresh();
     }
 
+    /**
+     * Actualiza la información de una orden.
+     * Consulta SQL Raw:
+     * UPDATE ordenes SET fecha_entrega_reparacion = ..., last_update = now() WHERE id_orden = $id;
+     */
     public static function update($id, $data)
     {
         $orden = Orden::find($id);
@@ -94,12 +129,12 @@ class OrdenService
 
         $data['last_update'] = now();
 
-        // Si se estÃ¡ anulando la orden
+        // Si se está anulando la orden directamente
         if (isset($data['estado_operativo']) && $data['estado_operativo'] === 'anulada') {
             $data['fecha_anulacion'] = now();
         }
 
-                if (!empty($data['fecha_entrega_reparacion'])) {
+        if (!empty($data['fecha_entrega_reparacion'])) {
             $data['fecha_entrega_reparacion'] = strlen($data['fecha_entrega_reparacion']) === 10
                 ? $data['fecha_entrega_reparacion'] . ' ' . now()->format('H:i:s')
                 : $data['fecha_entrega_reparacion'];
@@ -112,6 +147,12 @@ class OrdenService
         return $orden->fresh();
     }
 
+    /**
+     * Elimina físicamente una orden y sus líneas de detalle.
+     * Consulta SQL Raw:
+     * DELETE FROM detalles_ordenes WHERE id_orden = $id;
+     * DELETE FROM ordenes WHERE id_orden = $id;
+     */
     public static function delete($id)
     {
         $orden = Orden::find($id);
@@ -120,6 +161,8 @@ class OrdenService
         }
 
         DB::beginTransaction();
+        // Consulta SQL Raw equivalente:
+        // DELETE FROM "detalles_ordenes" WHERE "id_orden" = :id;
         DetalleOrden::where('id_orden', $id)->delete();
         $orden->delete();
         DB::commit();
@@ -128,10 +171,15 @@ class OrdenService
     }
 
     /**
-     * Procesa lÃ­neas de Venta:
+     * Procesa líneas de Venta:
      * - Para insumos: crea 1 registro en detalles_ordenes con la cantidad y descuenta stock propio.
      * - Para repuestos serializados: crea N registros en detalles_ordenes (cantidad = 1), marca id_orden_salida,
      *   monto_venta_real y utilidad en cada repuesto exacto, y descuenta stock e historiales de venta.
+     *
+     * Consulta SQL Raw:
+     * INSERT INTO detalles_ordenes (...) VALUES (...);
+     * UPDATE repuestos SET id_orden_salida = ..., monto_venta_real = ..., utilidad = ... WHERE id_repuesto = ...;
+     * UPDATE ordenes SET monto_total = ..., monto_pendiente = ... WHERE id_orden = ...;
      */
     public static function procesarVenta(Orden $orden, array $detalles)
     {
@@ -168,7 +216,7 @@ class OrdenService
                     'monto_total_linea_con_iva'       => $totalLinea,
                 ]);
 
-                // Descontar inmediatamente inventario y registrar metricas de venta
+                // Descontar inmediatamente inventario y registrar métricas de venta
                 if ($item) {
                     InventarioService::actualizarPorVenta($item, $cantidad, $precioUnitario);
                 }
@@ -182,7 +230,7 @@ class OrdenService
                 $totalNeto += $totalLinea;
             }
 
-            // CASO B: REPUESTOS SERIALIZADOS (compresor o valvula)
+            // CASO B: REPUESTOS SERIALIZADOS (compresor o válvula)
             if (!empty($linea['id_inventario_repuesto_saliente'])) {
                 $item = Inventario::find($linea['id_inventario_repuesto_saliente']);
                 $porcentajeIva = (float) ($linea['porcentaje_iva'] ?? ($item ? $item->porcentaje_iva : 19.00));
@@ -211,6 +259,12 @@ class OrdenService
                     ];
                 } else {
                     $cantRequerida = (int) ($linea['cantidad'] ?? 1);
+                    // Consulta SQL Raw equivalente:
+                    // SELECT * FROM "repuestos" 
+                    // WHERE "id_inventario" = :id_inventario 
+                    //   AND "id_orden_salida" IS NULL 
+                    //   AND "propietario" = true 
+                    // LIMIT :cantRequerida;
                     $repuestosDisponibles = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
                         ->whereNull('id_orden_salida')
                         ->where('propietario', true)
@@ -289,6 +343,11 @@ class OrdenService
      * - Sale repuesto del taller a precio_unitario (descuenta stock propio y asigna id_orden_salida, monto_venta_real, utilidad).
      * - Entra repuesto malo del cliente a monto_tasacion (propietario = true, pendiente_reparacion, suma stock propio) y asigna id_repuesto_entrante.
      * - El cliente paga la diferencia: (precio_unitario - monto_tasacion) + IVA.
+     *
+     * Consulta SQL Raw:
+     * INSERT INTO repuestos (id_inventario, serial, nombre, estado, propietario, costo_adquisicion, id_orden_entrada) VALUES (...);
+     * INSERT INTO detalles_ordenes (id_orden, id_repuesto_saliente, id_repuesto_entrante, precio_unitario, monto_tasacion, ...) VALUES (...);
+     * UPDATE repuestos SET id_orden_salida = ... WHERE id_repuesto = ...;
      */
     public static function procesarRecambio(Orden $orden, array $detalles)
     {
@@ -311,9 +370,15 @@ class OrdenService
             $ivaLinea = round($subtotalLinea * ($porcentajeIva / 100), 2);
             $totalLinea = $subtotalLinea + $ivaLinea;
 
-            // 1. REPUESTO SALIENTE: identificar, descontar stock propio y actualizar metricas
+            // 1. REPUESTO SALIENTE: identificar, descontar stock propio y actualizar métricas
             $idRepuestoSaliente = $linea['id_repuesto_saliente'] ?? null;
             if (!$idRepuestoSaliente && !empty($linea['id_inventario_repuesto_saliente'])) {
+                // Consulta SQL Raw equivalente:
+                // SELECT * FROM "repuestos" 
+                // WHERE "id_inventario" = :id_inventario 
+                //   AND "id_orden_salida" IS NULL 
+                //   AND "propietario" = true 
+                // LIMIT 1;
                 $repDisponible = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
                     ->whereNull('id_orden_salida')
                     ->where('propietario', true)
@@ -351,7 +416,7 @@ class OrdenService
             }
 
             // 3. CREAR REGISTRO EN detalles_ordenes PRIMERO
-            // Esto garantiza que el detalle ya exista en base de datos para el cÃ¡lculo ponderado de ventas
+            // Esto garantiza que el detalle ya exista en base de datos para el cálculo ponderado de ventas
             DetalleOrden::create([
                 'id_orden'                        => $orden->id_orden,
                 'id_inventario_insumo_saliente'   => null,
@@ -368,18 +433,18 @@ class OrdenService
                 'monto_total_linea_con_iva'       => $totalLinea,
             ]);
 
-            // 4. ACTUALIZAR MÃ‰TRICAS DE INVENTARIO:
-            // Salida de la venta (actualiza mÃ©tricas de venta ponderadas y descuenta stock propio)
+            // 4. ACTUALIZAR MÉTRICAS DE INVENTARIO:
+            // Salida de la venta (actualiza métricas de venta ponderadas y descuenta stock propio)
             if ($itemSaliente) {
                 InventarioService::actualizarPorVenta($itemSaliente, 1, $precioUnitario);
             }
 
-            // Si el Ã­tem entrante es el mismo saliente, refrescar para tomar el stock reciÃ©n decrementado
+            // Si el ítem entrante es el mismo saliente, refrescar para tomar el stock recién decrementado
             if ($itemEntrante && $itemSaliente && $itemEntrante->id_inventario === $itemSaliente->id_inventario) {
                 $itemEntrante->refresh();
             }
 
-            // Entrada por tasaciÃ³n (actualiza mÃ©tricas de adquisiciÃ³n/compra de usado y suma stock propio)
+            // Entrada por tasación (actualiza métricas de adquisición/compra de usado y suma stock propio)
             if ($itemEntrante) {
                 InventarioService::actualizarPorCompra($itemEntrante, 1, $montoTasacion);
             }
@@ -403,9 +468,13 @@ class OrdenService
     }
 
     /**
-     * Procesa RecepciÃ³n de ReparaciÃ³n directa:
+     * Procesa Recepción de Reparación directa:
      * - Entra repuesto del cliente (propietario = false, estado = 'pendiente_reparacion').
      * - En inventario suma cantidad_total y cantidad_cliente.
+     *
+     * Consulta SQL Raw:
+     * UPDATE inventario SET cantidad_total = cantidad_total + 1, cantidad_cliente = cantidad_cliente + 1 WHERE id_inventario = ...;
+     * INSERT INTO repuestos (id_inventario, serial, nombre, estado, propietario, costo_adquisicion, id_orden_entrada) VALUES (...);
      */
     public static function procesarRecepcionReparacion(Orden $orden, array $repuestosEntrantes)
     {
@@ -431,13 +500,20 @@ class OrdenService
     }
 
     /**
-     * Anula una orden (Venta, Recambio o ReparaciÃ³n):
-     * - Valida que no tenga pagos activos asociados.
-     * - Deshace salida/entrada fÃ­sica y contable.
-     * - Marca id_orden_salida = id_orden en repuestos que ingresaron por clientes (trazabilidad inmutable).
-     * - Devuelve insumos no gastados al inventario segÃºn el array opcional o el 100% por defecto.
-     * - Anula reparaciones y servicios de taller vinculados.
-     * - Recalcula mÃ©tricas completas en inventario (InventarioService::recalcularMetricasCompletas).
+     * Anula una orden (Venta, Recambio o Reparación):
+     * 1. Valida que no tenga pagos activos asociados.
+     * 2. Deshace la salida y entrada física de repuestos y materiales al inventario.
+     * 3. Marca id_orden_salida = id_orden en repuestos que ingresaron por clientes (trazabilidad inmutable).
+     * 4. Devuelve insumos al inventario según el array opcional de cantidades no gastadas o el 100% por defecto.
+     * 5. Anula reparaciones y servicios de taller vinculados.
+     * 6. Recalcula métricas completas en los inventarios afectados (InventarioService::recalcularMetricasCompletas).
+     *
+     * Consulta SQL Raw:
+     * SELECT EXISTS(SELECT 1 FROM pagos_clientes WHERE id_orden = $id AND estado != 'anulado');
+     * UPDATE repuestos SET id_orden_salida = NULL, monto_venta_real = NULL WHERE id_repuesto = ...;
+     * UPDATE reparaciones SET estado = 'anulada' WHERE id_orden = $id;
+     * UPDATE reparaciones_servicios_taller SET estado = 'anulado' WHERE id_reparacion IN (...);
+     * UPDATE ordenes SET estado_operativo = 'anulada', fecha_anulacion = now(), ... WHERE id_orden = $id;
      */
     public static function anular($id, array $data)
     {
@@ -454,7 +530,7 @@ class OrdenService
             return 'La orden ya se encuentra anulada';
         }
 
-        // 1. REGLA: No permitir anular si existen pagos asociados que no estÃ©n anulados
+        // 1. REGLA: No permitir anular si existen pagos asociados que no estén anulados
         $tienePagosActivos = PagoCliente::where('id_orden', $orden->id_orden)
             ->where('estado', '!=', PagoClienteEstado::ANULADO->value)
             ->exists();
@@ -470,8 +546,10 @@ class OrdenService
 
         $inventariosAfectados = [];
 
-        // 2. REVERTIR SEGÃšN EL TIPO DE ORDEN
+        // 2. REVERTIR SEGÚN EL TIPO DE ORDEN
         if ($nombreTipo === 'venta') {
+            // Consulta SQL Raw equivalente:
+            // SELECT * FROM "detalles_ordenes" WHERE "id_orden" = :id_orden;
             $detalles = DetalleOrden::where('id_orden', $orden->id_orden)->get();
 
             foreach ($detalles as $det) {
@@ -508,10 +586,12 @@ class OrdenService
                 }
             }
         } elseif ($nombreTipo === 'recambio') {
+            // Consulta SQL Raw equivalente:
+            // SELECT * FROM "detalles_ordenes" WHERE "id_orden" = :id_orden;
             $detalles = DetalleOrden::where('id_orden', $orden->id_orden)->get();
 
             foreach ($detalles as $det) {
-                // A. Repuesto propio que saliÃ³: vuelve al taller disponible
+                // A. Repuesto propio que salió: vuelve al taller disponible
                 if (!empty($det->id_repuesto_saliente)) {
                     $repSaliente = Repuesto::find($det->id_repuesto_saliente);
                     if ($repSaliente) {
@@ -553,6 +633,8 @@ class OrdenService
             }
         } elseif ($nombreTipo === 'reparacion') {
             // A. Repuestos de cliente que ingresaron: id_orden_salida = id_orden
+            // Consulta SQL Raw equivalente:
+            // SELECT * FROM "repuestos" WHERE "id_orden_entrada" = :id_orden;
             $repuestosCliente = Repuesto::where('id_orden_entrada', $orden->id_orden)->get();
             foreach ($repuestosCliente as $repCli) {
                 $repCli->update([
@@ -561,7 +643,7 @@ class OrdenService
                     'utilidad'         => 0.00,
                 ]);
 
-                // Si la orden aÃºn no estaba finalizada, descontar de cantidad_total y cantidad_cliente porque aÃºn figuraban en taller
+                // Si la orden aún no estaba finalizada, descontar de cantidad_total y cantidad_cliente porque aún figuraban en taller
                 if ($estadoOperativoStr !== OrdenEstadoOperativo::FINALIZADA->value) {
                     $itemCli = Inventario::find($repCli->id_inventario);
                     if ($itemCli) {
@@ -577,15 +659,19 @@ class OrdenService
             }
 
             // B. Revertir insumos de las reparaciones de esta orden
+            // Consulta SQL Raw equivalente:
+            // SELECT * FROM "reparaciones" WHERE "id_orden" = :id_orden;
             $reparaciones = Reparacion::where('id_orden', $orden->id_orden)->get();
             $insumosPayload = collect($data['insumos_devueltos'] ?? [])->keyBy('id_reparacion_insumo');
 
             foreach ($reparaciones as $rep) {
+                // Consulta SQL Raw equivalente:
+                // SELECT * FROM "reparaciones_insumos" WHERE "id_reparacion" = :id_reparacion;
                 $insumosRep = ReparacionInsumo::where('id_reparacion', $rep->id_reparacion)->get();
                 foreach ($insumosRep as $insumo) {
                     $cantDevolver = (int) $insumo->cantidad; // Por defecto el 100%
 
-                    // Si el admin especificÃ³ cantidades no gastadas explÃ­citas
+                    // Si el admin especificó cantidades no gastadas explícitas
                     if ($insumosPayload->has($insumo->id_reparacion_insumo)) {
                         $cantDevolver = (int) $insumosPayload[$insumo->id_reparacion_insumo]['cantidad_no_gastada'];
                     }
@@ -608,6 +694,8 @@ class OrdenService
                 ]);
 
                 // D. Marcar servicios de taller como anulados
+                // Consulta SQL Raw equivalente:
+                // UPDATE "reparaciones_servicios_taller" SET "estado" = 'en_espera' WHERE "id_reparacion" = :id_reparacion;
                 ReparacionServicioTaller::where('id_reparacion', $rep->id_reparacion)->update([
                     'estado' => TallerEstado::ANULADO->value,
                 ]);
@@ -619,11 +707,11 @@ class OrdenService
             'estado_operativo'   => OrdenEstadoOperativo::ANULADA->value,
             'fecha_anulacion'    => now(),
             'id_admin_anulacion' => $data['id_admin_anulacion'] ?? auth()->id() ?? 1,
-            'motivo_anulacion'   => $data['motivo_anulacion'] ?? 'AnulaciÃ³n de orden',
+            'motivo_anulacion'   => $data['motivo_anulacion'] ?? 'Anulación de orden',
             'last_update'        => now(),
         ]);
 
-        // 4. RECALCULAR MÃ‰TRICAS ECONÃ“MICAS COMPLETAS EN INVENTARIOS AFECTADOS
+        // 4. RECALCULAR MÉTRICAS ECONÓMICAS COMPLETAS EN INVENTARIOS AFECTADOS
         foreach (array_keys($inventariosAfectados) as $idInv) {
             InventarioService::recalcularMetricasCompletas((int) $idInv);
         }

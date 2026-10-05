@@ -4,6 +4,11 @@ namespace App\Models;
 
 use App\Models\ApiModel;
 
+/**
+ * Modelo Personal
+ * 
+ * Gestiona el personal técnico u operativo de taller encargado de realizar los servicios y reparaciones.
+ */
 class Personal extends ApiModel
 {
     protected $table = 'personal';

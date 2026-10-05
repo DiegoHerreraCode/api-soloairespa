@@ -6,18 +6,41 @@ use App\Models\ReparacionInsumo;
 use App\Models\Inventario;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Service ReparacionInsumoService
+ * 
+ * Gestiona el consumo, edición y eliminación de insumos cargados a una reparación.
+ * Sincroniza en tiempo real las existencias físicas de inventario (descontando o reintegrando stock)
+ * y dispara el recálculo consolidado de costos de la reparación.
+ */
 class ReparacionInsumoService
 {
+    /**
+     * Retorna todos los insumos consumidos en reparaciones.
+     * Consulta SQL Raw:
+     * SELECT * FROM reparaciones_insumos;
+     */
     public static function getAll()
     {
         return ReparacionInsumo::get();
     }
 
+    /**
+     * Obtiene el registro de un insumo cargado por su clave primaria.
+     * Consulta SQL Raw:
+     * SELECT * FROM reparaciones_insumos WHERE id_reparacion_insumo = $id LIMIT 1;
+     */
     public static function getOne($id)
     {
         return ReparacionInsumo::find($id);
     }
 
+    /**
+     * Registra un nuevo insumo consumido en una reparación a través de ReparacionService,
+     * descontando el stock del inventario y recalculando la reparación.
+     * Consulta SQL Raw:
+     * INSERT INTO reparaciones_insumos (...) VALUES (...);
+     */
     public static function create($data)
     {
         DB::beginTransaction();
@@ -25,7 +48,7 @@ class ReparacionInsumoService
         $data['id_admin'] = $data['id_admin'] ?? auth()->id() ?? 1;
         $insumo = ReparacionService::registrarInsumo($data);
 
-        // Recalcular costos de la reparaciÃ³n
+        // Recalcular costos consolidados de la reparación
         ReparacionService::recalcularCostosReparacion($insumo->id_reparacion);
 
         DB::commit();
@@ -33,6 +56,14 @@ class ReparacionInsumoService
         return $insumo;
     }
 
+    /**
+     * Actualiza la cantidad o costos de un insumo cargado.
+     * Si la cantidad cambia, calcula la diferencia neta y ajusta el stock propio de inventario.
+     * Consulta SQL Raw:
+     * SELECT * FROM reparaciones_insumos WHERE id_reparacion_insumo = $id LIMIT 1;
+     * UPDATE inventario SET cantidad_total = ..., cantidad_propia = ... WHERE id_inventario = ...;
+     * UPDATE reparaciones_insumos SET cantidad = ..., monto_total_linea = ... WHERE id_reparacion_insumo = $id;
+     */
     public static function update($id, $data)
     {
         $insumo = ReparacionInsumo::find($id);
@@ -45,7 +76,7 @@ class ReparacionInsumoService
         $cantidadAnterior = (int) $insumo->cantidad;
         $item = Inventario::find($insumo->id_inventario);
 
-        // Si se modifica la cantidad, ajustar inventario
+        // Si se modifica la cantidad consumida, ajustar existencias de inventario
         if (isset($data['cantidad'])) {
             $nuevaCantidad = (int) $data['cantidad'];
             $diferencia = $nuevaCantidad - $cantidadAnterior;
@@ -68,7 +99,7 @@ class ReparacionInsumoService
 
         $insumo->update($data);
 
-        // Recalcular costos de la reparaciÃ³n
+        // Recalcular costos de la reparación
         ReparacionService::recalcularCostosReparacion($insumo->id_reparacion);
 
         DB::commit();
@@ -76,6 +107,12 @@ class ReparacionInsumoService
         return $insumo->fresh();
     }
 
+    /**
+     * Elimina un insumo cargado por error y reintegra el 100% de las unidades al inventario.
+     * Consulta SQL Raw:
+     * UPDATE inventario SET cantidad_total = cantidad_total + ..., cantidad_propia = cantidad_propia + ... WHERE id_inventario = ...;
+     * DELETE FROM reparaciones_insumos WHERE id_reparacion_insumo = $id;
+     */
     public static function delete($id)
     {
         $insumo = ReparacionInsumo::find($id);
@@ -98,7 +135,7 @@ class ReparacionInsumoService
 
         $insumo->delete();
 
-        // Recalcular costos de la reparaciÃ³n
+        // Recalcular costos consolidados de la reparación
         ReparacionService::recalcularCostosReparacion($idReparacion);
 
         DB::commit();

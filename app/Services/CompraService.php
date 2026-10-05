@@ -14,18 +14,53 @@ use App\Enums\PagoCompraEstado;
 use App\Services\InventarioService;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Service CompraService
+ * 
+ * Orquesta el flujo integral de compras a proveedores:
+ * - Creación de cabecera con desglose de montos gravados, exentos e IVA.
+ * - Registro de líneas de compra (detalles_compras).
+ * - Aumento de existencias y recálculo ponderado exacto en inventario.
+ * - Generación de unidades físicas serializadas (equipos o repuestos nuevos).
+ * - Generación de cronograma de pagos pendientes a proveedores.
+ * - Reversión de stock y pagos en caso de eliminación.
+ */
 class CompraService
 {
+    /**
+     * Retorna todas las compras registradas.
+     * Consulta SQL Raw:
+     * SELECT * FROM compras;
+     */
     public static function getAll()
     {
         return Compra::get();
     }
 
+    /**
+     * Obtiene una compra por su ID.
+     * Consulta SQL Raw:
+     * SELECT * FROM compras WHERE id_compra = $id LIMIT 1;
+     */
     public static function getOne($id)
     {
         return Compra::find($id);
     }
 
+    /**
+     * Registra una compra completa:
+     * 1. Calcula totales fiscales y monto pendiente si no se proporcionaron.
+     * 2. Inserta la cabecera con estado inicial 'por_pagar'.
+     * 3. Inserta cada detalle, actualiza inventario y genera serializados.
+     * 4. Registra el cronograma de pagos a proveedores en estado 'pendiente'.
+     *
+     * Consulta SQL Raw:
+     * INSERT INTO compras (...) VALUES (...);
+     * INSERT INTO detalles_compras (...) VALUES (...);
+     * UPDATE inventario SET cantidad_total = ..., cantidad_propia = ... WHERE id_inventario = ...;
+     * INSERT INTO equipos / repuestos (...) VALUES (...);
+     * INSERT INTO pagos_compras (...) VALUES (...);
+     */
     public static function create($data)
     {
         DB::beginTransaction();
@@ -34,7 +69,7 @@ class CompraService
         $pagos = $data['pagos'] ?? [];
         unset($data['detalles'], $data['pagos']);
 
-        // 1. CÃ¡lculos automÃ¡ticos de la cabecera si no vienen completos
+        // 1. Cálculos automáticos de la cabecera si no vienen completos
         if (!isset($data['monto_total']) && !empty($detalles)) {
             $totalGravado = 0.00;
             $totalExento = 0.00;
@@ -81,7 +116,7 @@ class CompraService
         // 2. Crear cabecera de Compra
         $compra = Compra::create($data);
 
-        // 3. Procesar lÃ­neas de compra, serializados e inventario
+        // 3. Procesar líneas de compra, serializados e inventario
         if (!empty($detalles) && is_array($detalles)) {
             foreach ($detalles as $lineaData) {
                 $seriales = $lineaData['seriales'] ?? [];
@@ -98,7 +133,7 @@ class CompraService
             }
         }
 
-        // 4. GeneraciÃ³n de Pagos a Compras a partir del arreglo de pagos (todos nacen con estado "pendiente")
+        // 4. Generación de Pagos a Compras a partir del arreglo de pagos (todos nacen con estado "pendiente")
         self::generarPagosCompra($compra, $pagos);
 
         DB::commit();
@@ -106,6 +141,11 @@ class CompraService
         return $compra->load(['detalles', 'pagosCompras']);
     }
 
+    /**
+     * Actualiza atributos de la compra.
+     * Consulta SQL Raw:
+     * UPDATE compras SET num_factura_boleta = ..., fecha_compra = ... WHERE id_compra = $id;
+     */
     public static function update($id, $data)
     {
         $compra = Compra::find($id);
@@ -122,6 +162,21 @@ class CompraService
         return $compra->load(['detalles', 'pagosCompras']);
     }
 
+    /**
+     * Elimina una compra revirtiendo sus efectos:
+     * - Elimina los pagos asociados.
+     * - Elimina los equipos y repuestos serializados generados.
+     * - Descuenta las existencias ingresadas del inventario.
+     * - Elimina las líneas de detalle y la cabecera de compra.
+     *
+     * Consulta SQL Raw:
+     * DELETE FROM pagos_compras WHERE id_compra = $id;
+     * DELETE FROM equipos WHERE id_detalle_compra IN (...);
+     * DELETE FROM repuestos WHERE id_detalle_compra IN (...);
+     * UPDATE inventario SET cantidad_total = ..., cantidad_propia = ... WHERE id_inventario = ...;
+     * DELETE FROM detalles_compras WHERE id_compra = $id;
+     * DELETE FROM compras WHERE id_compra = $id;
+     */
     public static function delete($id)
     {
         $compra = Compra::find($id);
@@ -131,12 +186,20 @@ class CompraService
 
         DB::beginTransaction();
 
+        // Consulta SQL Raw equivalente:
+        // DELETE FROM "pagos_compras" WHERE "id_compra" = :id;
         PagoCompra::where('id_compra', $id)->delete();
 
+        // Consulta SQL Raw equivalente:
+        // SELECT * FROM "detalles_compras" WHERE "id_compra" = :id;
         $detalles = DetalleCompra::where('id_compra', $id)->get();
 
         foreach ($detalles as $detalle) {
+            // Consulta SQL Raw equivalente:
+            // DELETE FROM "equipos" WHERE "id_detalle_compra" = :id_detalle_compra;
             Equipo::where('id_detalle_compra', $detalle->id_detalle_compra)->delete();
+            // Consulta SQL Raw equivalente:
+            // DELETE FROM "repuestos" WHERE "id_detalle_compra" = :id_detalle_compra;
             Repuesto::where('id_detalle_compra', $detalle->id_detalle_compra)->delete();
 
             $item = Inventario::find($detalle->id_inventario);
@@ -148,6 +211,9 @@ class CompraService
                     'cantidad_total'  => $nuevaCantidadTotal,
                     'cantidad_propia' => $nuevaCantidadPropia,
                 ]);
+
+                // Recalcular métricas de compra en inventario
+                InventarioService::recalcularMetricasCompletas($item->id_inventario);
             }
 
             $detalle->delete();
@@ -162,8 +228,10 @@ class CompraService
 
     /**
      * Genera los registros en pagos_compras al registrar una nueva compra.
-     * Siempre se recibe un arreglo de 1 a N pagos desde el front.
-     * Todos los pagos nacen siempre en estado "pendiente" con valores iniciales null para los campos de pago.
+     * Todos los pagos nacen en estado 'pendiente'.
+     *
+     * Consulta SQL Raw:
+     * INSERT INTO pagos_compras (id_compra, id_admin, monto_a_pagar, estado, ...) VALUES (...);
      */
     public static function generarPagosCompra(Compra $compra, array $pagos = [])
     {
@@ -191,7 +259,7 @@ class CompraService
     }
 
     /**
-     * Actualiza stock y Precio Promedio Ponderado de Inventario usando InventarioService.
+     * Aumenta el stock y recalcula métricas ponderadas en InventarioService.
      */
     public static function actualizarInventarioTrasCompra(Inventario $item, int $cantidadComprada, float $costoUnitario)
     {
@@ -199,7 +267,12 @@ class CompraService
     }
 
     /**
-     * Genera los registros de Equipos o Repuestos segÃºn el tipo de inventario.
+     * Genera automáticamente las piezas físicas serializadas correspondientes a la compra
+     * (equipos o repuestos nuevos con propietario = true y costo_adquisicion).
+     *
+     * Consulta SQL Raw:
+     * INSERT INTO equipos (id_modelo, id_detalle_compra, serial, nombre) VALUES (...);
+     * INSERT INTO repuestos (id_inventario, id_detalle_compra, serial, nombre, estado, propietario, costo_adquisicion, costo_total) VALUES (...);
      */
     public static function generarSerializados(DetalleCompra $detalle, Inventario $item, array $seriales = [])
     {

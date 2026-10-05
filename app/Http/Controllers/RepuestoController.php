@@ -6,8 +6,26 @@ use App\Services\RepuestoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Class RepuestoController
+ *
+ * Controlador RESTful encargado de gestionar los repuestos físicos individuales
+ * (compresores, válvulas, componentes) identificados por su serial único y titularidad (propio vs cliente).
+ */
 class RepuestoController extends Controller
 {
+    /**
+     * Retorna la lista total de repuestos registrados en el sistema.
+     *
+     * Lógica:
+     * 1. Consulta la colección completa mediante RepuestoService::getAll().
+     * 2. Devuelve respuesta estándar JSON con HTTP 200.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "repuestos";
+     *
+     * @return JsonResponse Lista de repuestos.
+     */
     public function index(): JsonResponse
     {
         $repuestos = RepuestoService::getAll();
@@ -17,6 +35,21 @@ class RepuestoController extends Controller
         );
     }
 
+    /**
+     * Registra un nuevo repuesto individual en el sistema.
+     *
+     * Lógica:
+     * 1. Valida inventario padre, serial, nombre, estado (nuevo, reparado, pendiente_reparacion),
+     *    propiedad y valores de costos iniciales.
+     * 2. Envía la carga útil a RepuestoService::create($data) para asignar ID y guardar el registro.
+     * 3. Devuelve el repuesto creado con código HTTP 201.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- INSERT INTO "repuestos" ("id_repuesto", "id_inventario", "serial", "nombre", "estado", "propietario", ...) VALUES (...);
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
     public function store(Request $request): JsonResponse
     {
         $request->validate([
@@ -46,6 +79,19 @@ class RepuestoController extends Controller
         return $this->successResponse($repuesto, 'Repuesto creado correctamente', 201);
     }
 
+    /**
+     * Consulta y devuelve la información de un repuesto según su identificador único.
+     *
+     * Lógica:
+     * 1. Busca el repuesto vía RepuestoService::getOne($id).
+     * 2. Si no existe devuelve 404, de lo contrario entrega el recurso con 200 OK.
+     *
+     * Consulta SQL ejecutada internamente vía Eloquent:
+     * -- SELECT * FROM "repuestos" WHERE "id_repuesto" = :id LIMIT 1;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function show($id): JsonResponse
     {
         $repuesto = RepuestoService::getOne($id);
@@ -56,6 +102,22 @@ class RepuestoController extends Controller
         return $this->successResponse($repuesto, 'Repuesto obtenido correctamente');
     }
 
+    /**
+     * Actualiza la información técnica, financiera o de trazabilidad de un repuesto.
+     *
+     * Lógica:
+     * 1. Valida los campos proporcionados.
+     * 2. Comprueba que al menos un campo modificable haya sido enviado.
+     * 3. Invoca RepuestoService::update($id, $data) y responde con el registro actualizado.
+     *
+     * Consultas SQL ejecutadas internamente:
+     * -- SELECT * FROM "repuestos" WHERE "id_repuesto" = :id LIMIT 1;
+     * -- UPDATE "repuestos" SET "estado" = 'reparado', "updated_at" = NOW() WHERE "id_repuesto" = :id;
+     *
+     * @param Request $request
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
@@ -105,6 +167,21 @@ class RepuestoController extends Controller
         return $this->successResponse($repuesto, 'Repuesto actualizado correctamente');
     }
 
+    /**
+     * Elimina un repuesto de la base de datos.
+     *
+     * Lógica:
+     * 1. Invoca RepuestoService::delete($id).
+     * 2. Si no existe o no se pudo eliminar devuelve error 404.
+     * 3. Retorna el repuesto eliminado con HTTP 200.
+     *
+     * Consultas SQL ejecutadas internamente vía Eloquent:
+     * -- SELECT * FROM "repuestos" WHERE "id_repuesto" = :id LIMIT 1;
+     * -- DELETE FROM "repuestos" WHERE "id_repuesto" = :id;
+     *
+     * @param int|string $id
+     * @return JsonResponse
+     */
     public function destroy($id): JsonResponse
     {
         $repuesto = RepuestoService::delete($id);

@@ -4,6 +4,12 @@ namespace App\Models;
 
 use App\Models\ApiModel;
 
+/**
+ * Modelo Cliente
+ * 
+ * Gestiona la información de contacto y fiscal de clientes (propietarios de repuestos,
+ * compradores o solicitantes de servicios de taller).
+ */
 class Cliente extends ApiModel
 {
     protected $table = 'clientes';
