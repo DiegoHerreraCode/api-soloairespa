@@ -9,11 +9,14 @@ use App\Enums\PagoClienteEstado;
 /**
  * Modelo PagoCliente
  * 
- * Gestiona los pagos / abonos efectuados por los clientes a sus órdenes de trabajo.
- * Permite control de amortizaciones, trazabilidad de comprobantes y flujo de anulación con auditoría.
+ * Gestiona los pagos / abonos efectuados por los clientes a sus ï¿½rdenes de trabajo.
+ * Permite control de amortizaciones, trazabilidad de comprobantes y flujo de anulaciï¿½n con auditorï¿½a.
  */
 class PagoCliente extends ApiModel
 {
+    const IMAGE_PATH = 'pagos_clientes';
+    const IMAGE_FIELD = 'image'; // campo que guarda el nombre original de la imagen
+    const IMAGE_PATH_FIELD = 'imagePath'; // campo que guarda la ruta relativa de la imagen
     protected $table = 'pagos_clientes';
     protected $primaryKey = 'id_pago_cliente';
     protected $keyType = 'int';
@@ -28,7 +31,8 @@ class PagoCliente extends ApiModel
         'fecha_pago',
         'metodo_pago',
         'num_referencia',
-        'comprobante',
+        'image',
+        'imagePath',
         'fecha_anulacion',
         'id_admin_anulacion',
         'motivo_anulacion',
@@ -36,11 +40,11 @@ class PagoCliente extends ApiModel
 
     protected $casts = [
         'metodo_pago' => MetodoPago::class,
-        'estado'      => PagoClienteEstado::class,
+        'estado' => PagoClienteEstado::class,
     ];
 
     /**
-     * Cliente que realizó el pago.
+     * Cliente que realizï¿½ el pago.
      * Consulta SQL Raw:
      * SELECT * FROM clientes WHERE id_cliente = pagos_clientes.id_cliente LIMIT 1;
      */
@@ -60,7 +64,7 @@ class PagoCliente extends ApiModel
     }
 
     /**
-     * Administrador que anuló el pago (en caso de anulación).
+     * Administrador que anulï¿½ el pago (en caso de anulaciï¿½n).
      * Consulta SQL Raw:
      * SELECT * FROM admins WHERE id_admin = pagos_clientes.id_admin_anulacion LIMIT 1;
      */

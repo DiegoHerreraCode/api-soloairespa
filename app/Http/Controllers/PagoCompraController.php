@@ -97,14 +97,14 @@ class PagoCompraController extends Controller
     {
         $request->validate([
             'id_admin' => 'nullable|integer|exists:admins,id_admin',
-            'monto_a_pagar' => 'numeric|min:0.01',
-            'porcentaje_monto_total' => 'numeric',
+            'monto_a_pagar' => 'nullable|numeric|min:0.01',
+            'porcentaje_monto_total' => 'nullable|numeric',
             'fecha_pago' => 'nullable|date',
             'fecha_pago_acordada' => 'nullable|date',
             'metodo_pago' => 'nullable|in:transferencia,efectivo,cheque',
             'num_referencia' => 'nullable|string|max:50',
-            'comprobante' => 'nullable|string|max:100',
-            'estado' => 'in:pendiente,realizado',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
+            'estado' => 'nullable|in:pendiente,realizado',
         ]);
 
         // Validar que al menos un campo sea modificado
@@ -116,7 +116,7 @@ class PagoCompraController extends Controller
             !$request->has('fecha_pago_acordada') &&
             !$request->has('metodo_pago') &&
             !$request->has('num_referencia') &&
-            !$request->has('comprobante') &&
+            !$request->has('image') &&
             !$request->has('estado')
         ) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);

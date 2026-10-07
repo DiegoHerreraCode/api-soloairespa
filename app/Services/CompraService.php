@@ -104,10 +104,10 @@ class CompraService
             unset($linea);
 
             $data['monto_total_gravado'] = $data['monto_total_gravado'] ?? $totalGravado;
-            $data['monto_total_exento']  = $data['monto_total_exento'] ?? $totalExento;
-            $data['monto_total_iva']     = $data['monto_total_iva'] ?? $totalIva;
-            $data['monto_total']         = $data['monto_total'] ?? $montoTotal;
-            $data['monto_pendiente']     = $data['monto_pendiente'] ?? $montoTotal;
+            $data['monto_total_exento'] = $data['monto_total_exento'] ?? $totalExento;
+            $data['monto_total_iva'] = $data['monto_total_iva'] ?? $totalIva;
+            $data['monto_total'] = $data['monto_total'] ?? $montoTotal;
+            $data['monto_pendiente'] = $data['monto_pendiente'] ?? $montoTotal;
         }
 
         // Una compra siempre nace con estado "por_pagar"
@@ -208,7 +208,7 @@ class CompraService
                 $nuevaCantidadPropia = max(0, (int) $item->cantidad_propia - (int) $detalle->cantidad);
 
                 $item->update([
-                    'cantidad_total'  => $nuevaCantidadTotal,
+                    'cantidad_total' => $nuevaCantidadTotal,
                     'cantidad_propia' => $nuevaCantidadPropia,
                 ]);
 
@@ -244,16 +244,12 @@ class CompraService
                 : ($montoTotal > 0 ? round(($montoCuota / $montoTotal) * 100, 2) : 0);
 
             PagoCompra::create([
-                'id_compra'              => $compra->id_compra,
-                'id_admin'               => $compra->id_admin,
-                'monto_a_pagar'          => $montoCuota,
+                'id_compra' => $compra->id_compra,
+                'id_admin' => $compra->id_admin,
+                'monto_a_pagar' => $montoCuota,
                 'porcentaje_monto_total' => $porcentaje,
-                'fecha_pago'             => null,
-                'fecha_pago_acordada'    => $pago['fecha_pago_acordada'] ?? now(),
-                'metodo_pago'            => null,
-                'num_referencia'         => null,
-                'comprobante'            => null,
-                'estado'                 => PagoCompraEstado::PENDIENTE->value,
+                'fecha_pago_acordada' => $pago['fecha_pago_acordada'] ?? now(),
+                'estado' => PagoCompraEstado::PENDIENTE->value,
             ]);
         }
     }
@@ -282,25 +278,25 @@ class CompraService
             for ($i = 0; $i < $detalle->cantidad; $i++) {
                 $serialData = $seriales[$i] ?? [];
                 Equipo::create([
-                    'id_modelo'         => $item->id_modelo,
+                    'id_modelo' => $item->id_modelo,
                     'id_detalle_compra' => $detalle->id_detalle_compra,
-                    'serial'            => $serialData['serial'] ?? null,
-                    'nombre'            => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
+                    'serial' => $serialData['serial'] ?? null,
+                    'nombre' => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
                 ]);
             }
         } elseif (in_array($tipo, ['compresor', 'valvula'])) {
             for ($i = 0; $i < $detalle->cantidad; $i++) {
                 $serialData = $seriales[$i] ?? [];
                 Repuesto::create([
-                    'id_inventario'         => $item->id_inventario,
-                    'id_detalle_compra'     => $detalle->id_detalle_compra,
-                    'serial'                => $serialData['serial'] ?? null,
-                    'service_tag'           => ($serialData['service_tag'] ?? $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1))) . '_' . now()->format('Ymd_His') . '_' . ($i + 1),
-                    'estado'                => 'nuevo',
-                    'propietario'           => true,
-                    'costo_adquisicion'     => $detalle->costo_unitario,
+                    'id_inventario' => $item->id_inventario,
+                    'id_detalle_compra' => $detalle->id_detalle_compra,
+                    'serial' => $serialData['serial'] ?? null,
+                    'service_tag' => ($serialData['service_tag'] ?? $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1))) . '_' . now()->format('Ymd_His') . '_' . ($i + 1),
+                    'estado' => 'nuevo',
+                    'propietario' => true,
+                    'costo_adquisicion' => $detalle->costo_unitario,
                     'costo_reparacion_base' => 0.00,
-                    'costo_total'           => $detalle->costo_unitario,
+                    'costo_total' => $detalle->costo_unitario,
                 ]);
             }
         }

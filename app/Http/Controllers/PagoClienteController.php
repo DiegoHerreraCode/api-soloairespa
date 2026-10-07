@@ -64,7 +64,7 @@ class PagoClienteController extends Controller
             'fecha_pago' => 'nullable|date',
             'metodo_pago' => 'required|in:transferencia,efectivo,cheque',
             'num_referencia' => 'nullable|string|max:50',
-            'comprobante' => 'nullable|string|max:100',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
         ]);
 
         $data = $request->all();
@@ -128,7 +128,7 @@ class PagoClienteController extends Controller
             'fecha_pago' => 'date',
             'metodo_pago' => 'in:transferencia,efectivo,cheque',
             'num_referencia' => 'string|max:50',
-            'comprobante' => 'string|max:100',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
         ]);
 
         // Validar que al menos un campo sea modificado
@@ -139,7 +139,7 @@ class PagoClienteController extends Controller
             !$request->has('fecha_pago') &&
             !$request->has('metodo_pago') &&
             !$request->has('num_referencia') &&
-            !$request->has('comprobante')
+            !$request->has('image')
         ) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);
         }

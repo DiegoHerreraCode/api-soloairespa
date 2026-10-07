@@ -100,7 +100,7 @@ class CompraController extends Controller
             'pagos.*.fecha_pago' => 'nullable|date',
             'pagos.*.metodo_pago' => 'nullable|in:transferencia,efectivo,cheque',
             'pagos.*.num_referencia' => 'nullable|string|max:50',
-            'pagos.*.comprobante' => 'nullable|string|max:100',
+            'pagos.*.image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
             'pagos.*.estado' => 'required|in:pendiente,realizado',
         ]);
 

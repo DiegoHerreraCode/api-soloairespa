@@ -4,14 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Traits\HasGeneratedID;
+use App\Traits\HasImage;
 
 /**
  * Modelo Base ApiModel
  * 
  * Clase abstracta / base que extiende de Eloquent Model e incorpora
- * el Trait HasGeneratedID para asignación automática de IDs enteros secuenciales.
+ * el Trait HasGeneratedID para asignaciï¿½n automï¿½tica de IDs enteros secuenciales.
+ * el trait HasImage permite que los modelos que hereden de este puedan tener imagenes.
  */
 class ApiModel extends Model
 {
-    use HasGeneratedID;
+    use HasGeneratedID, HasImage;
 }

@@ -9,10 +9,13 @@ use App\Enums\PagoCompraEstado;
 /**
  * Modelo PagoCompra
  * 
- * Registro de amortización / abono de pago a un proveedor para saldar una compra.
+ * Registro de amortizaciï¿½n / abono de pago a un proveedor para saldar una compra.
  */
 class PagoCompra extends ApiModel
 {
+    const IMAGE_PATH = 'pagos_compras';
+    const IMAGE_FIELD = 'image'; // campo que guarda el nombre original de la imagen
+    const IMAGE_PATH_FIELD = 'imagePath'; // campo que guarda la ruta relativa de la imagen
     protected $table = 'pagos_compras';
     protected $primaryKey = 'id_pago_compra';
     protected $keyType = 'int';
@@ -28,13 +31,14 @@ class PagoCompra extends ApiModel
         'fecha_pago_acordada',
         'metodo_pago',
         'num_referencia',
-        'comprobante',
+        'image',
+        'imagePath',
         'estado',
     ];
 
     protected $casts = [
         'metodo_pago' => MetodoPago::class,
-        'estado'      => PagoCompraEstado::class,
+        'estado' => PagoCompraEstado::class,
     ];
 
     /**
@@ -48,7 +52,7 @@ class PagoCompra extends ApiModel
     }
 
     /**
-     * Administrador que efectuó o registró el pago.
+     * Administrador que efectuï¿½ o registrï¿½ el pago.
      * Consulta SQL Raw:
      * SELECT * FROM admins WHERE id_admin = pagos_compras.id_admin LIMIT 1;
      */
