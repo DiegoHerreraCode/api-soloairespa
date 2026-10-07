@@ -90,18 +90,17 @@ class CompraController extends Controller
             'detalles.*.seriales' => 'nullable|array',
             'detalles.*.seriales.*.serial' => 'nullable|string|max:100',
             'detalles.*.seriales.*.service_tag' => 'nullable|string|max:100',
-            'detalles.*.seriales.*.nombre' => 'nullable|string|max:100',
 
             // Arreglo de pagos (1 a N elementos)
             'pagos' => 'required|array|min:1',
             'pagos.*.monto_a_pagar' => 'required|numeric|min:0.01',
-            'pagos.*.porcentaje_monto_total' => 'nullable|numeric',
+            'pagos.*.porcentaje_monto_total' => 'required|numeric',
             'pagos.*.fecha_pago_acordada' => 'required|date',
             'pagos.*.fecha_pago' => 'nullable|date',
             'pagos.*.metodo_pago' => 'nullable|in:transferencia,efectivo,cheque',
             'pagos.*.num_referencia' => 'nullable|string|max:50',
             'pagos.*.image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
-            'pagos.*.estado' => 'required|in:pendiente,realizado',
+            'pagos.*.estado' => 'nullable|in:pendiente,realizado',
         ]);
 
         $data = $request->all();

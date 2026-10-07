@@ -42,16 +42,16 @@ class Cotizacion extends ApiModel
     ];
 
     protected $casts = [
-        'tipo'                        => CotizacionTipo::class,
-        'estado'                      => CotizacionEstado::class,
-        'monto_total_gravado'         => 'float',
-        'monto_total_exento'          => 'float',
-        'monto_total_iva'             => 'float',
-        'monto_total'                 => 'float',
-        'fecha_creacion'              => 'datetime',
-        'fecha_vencimiento'           => 'datetime',
-        'fecha_anulacion'             => 'datetime',
-        'num_repuestos_a_reparar'     => 'integer',
+        'tipo' => CotizacionTipo::class,
+        'estado' => CotizacionEstado::class,
+        'monto_total_gravado' => 'float',
+        'monto_total_exento' => 'float',
+        'monto_total_iva' => 'float',
+        'monto_total' => 'float',
+        'fecha_creacion' => 'datetime',
+        'fecha_vencimiento' => 'datetime',
+        'fecha_anulacion' => 'datetime',
+        'num_repuestos_a_reparar' => 'integer',
     ];
 
     /**
@@ -78,7 +78,7 @@ class Cotizacion extends ApiModel
         return is_array($decoded) ? $decoded : [];
     }
 
-        public function setServicesTagsRepuestosARepararAttribute($value): void
+    public function setServicesTagsRepuestosARepararAttribute($value): void
     {
         if (is_array($value)) {
             // Convierte el array PHP al formato nativo PostgreSQL: {"elem1","elem2"}
@@ -103,9 +103,6 @@ class Cotizacion extends ApiModel
         static::creating(function ($cotizacion) {
             if (empty($cotizacion->num_cotizacion)) {
                 $cotizacion->num_cotizacion = 'COT-' . str_pad($cotizacion->id_cotizacion, 5, '0', STR_PAD_LEFT);
-            }
-            if (empty($cotizacion->pdf_cotizacion)) {
-                $cotizacion->pdf_cotizacion = $cotizacion->num_cotizacion . '.pdf';
             }
         });
     }

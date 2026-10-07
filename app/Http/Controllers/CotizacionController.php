@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\CotizacionService;
 use App\Models\Admin;
+use App\Services\PDFService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -51,32 +52,32 @@ class CotizacionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'id_cliente'                     => 'required|integer|exists:clientes,id_cliente',
-            'id_tipo_orden'                  => 'required|integer|exists:tipos_ordenes,id_tipo_orden',
-            'id_admin'                       => 'nullable|integer|exists:admins,id_admin',
-            'fecha_vencimiento'              => 'nullable|date',
-            'num_repuestos_a_reparar'        => 'nullable|integer|min:1',
-            'services_tags_repuestos_a_reparar'    => 'nullable|array',
-            'services_tags_repuestos_a_reparar.*'  => 'required_with:services_tags_repuestos_a_reparar|string|max:100',
+            'id_cliente' => 'required|integer|exists:clientes,id_cliente',
+            'id_tipo_orden' => 'required|integer|exists:tipos_ordenes,id_tipo_orden',
+            'id_admin' => 'nullable|integer|exists:admins,id_admin',
+            'fecha_vencimiento' => 'nullable|date',
+            'num_repuestos_a_reparar' => 'nullable|integer|min:1',
+            'services_tags_repuestos_a_reparar' => 'nullable|array',
+            'services_tags_repuestos_a_reparar.*' => 'required_with:services_tags_repuestos_a_reparar|string|max:100',
 
             // Líneas de inventario (insumos, repuestos salientes o recambios)
-            'detalles_inventario'                                     => 'nullable|array',
-            'detalles_inventario.*.id_inventario_insumo_saliente'     => 'nullable|integer|exists:inventario,id_inventario',
-            'detalles_inventario.*.id_inventario_repuesto_saliente'   => 'nullable|integer|exists:inventario,id_inventario',
-            'detalles_inventario.*.id_inventario_repuesto_entrante'   => 'nullable|integer|exists:inventario,id_inventario',
-            'detalles_inventario.*.cantidad'                          => 'nullable|integer|min:1',
-            'detalles_inventario.*.precio_unitario'                   => 'nullable|numeric|min:0',
-            'detalles_inventario.*.monto_tasacion'                    => 'nullable|numeric|min:0',
-            'detalles_inventario.*.porcentaje_iva'                    => 'nullable|numeric|min:0',
-            'detalles_inventario.*.service_tag_repuesto_a_reparar'         => 'nullable|string|max:100',
+            'detalles_inventario' => 'nullable|array',
+            'detalles_inventario.*.id_inventario_insumo_saliente' => 'nullable|integer|exists:inventario,id_inventario',
+            'detalles_inventario.*.id_inventario_repuesto_saliente' => 'nullable|integer|exists:inventario,id_inventario',
+            'detalles_inventario.*.id_inventario_repuesto_entrante' => 'nullable|integer|exists:inventario,id_inventario',
+            'detalles_inventario.*.cantidad' => 'nullable|integer|min:1',
+            'detalles_inventario.*.precio_unitario' => 'nullable|numeric|min:0',
+            'detalles_inventario.*.monto_tasacion' => 'nullable|numeric|min:0',
+            'detalles_inventario.*.porcentaje_iva' => 'nullable|numeric|min:0',
+            'detalles_inventario.*.service_tag_repuesto_a_reparar' => 'nullable|string|max:100',
 
             // Líneas de servicios de taller (mano de obra)
-            'detalles_servicios'                                      => 'nullable|array',
-            'detalles_servicios.*.id_servicio_taller'                 => 'required_with:detalles_servicios|integer|exists:servicios_taller,id_servicio_taller',
-            'detalles_servicios.*.cantidad'                           => 'nullable|integer|min:1',
-            'detalles_servicios.*.precio_unitario'                    => 'nullable|numeric|min:0',
-            'detalles_servicios.*.porcentaje_iva'                     => 'nullable|numeric|min:0',
-            'detalles_servicios.*.service_tag_repuesto_a_reparar'          => 'nullable|string|max:100',
+            'detalles_servicios' => 'nullable|array',
+            'detalles_servicios.*.id_servicio_taller' => 'required_with:detalles_servicios|integer|exists:servicios_taller,id_servicio_taller',
+            'detalles_servicios.*.cantidad' => 'nullable|integer|min:1',
+            'detalles_servicios.*.precio_unitario' => 'nullable|numeric|min:0',
+            'detalles_servicios.*.porcentaje_iva' => 'nullable|numeric|min:0',
+            'detalles_servicios.*.service_tag_repuesto_a_reparar' => 'nullable|string|max:100',
         ]);
 
         $data = $request->all();
@@ -88,6 +89,7 @@ class CotizacionController extends Controller
         }
 
         $cotizacion = CotizacionService::create($data);
+
         if (!$cotizacion) {
             return $this->errorResponse('Cotización no creada', 404);
         }

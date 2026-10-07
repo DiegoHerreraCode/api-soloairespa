@@ -16,6 +16,7 @@ use App\Enums\CotizacionTipo;
 use App\Enums\CotizacionEstado;
 use App\Enums\OrdenEstadoOperativo;
 use Illuminate\Support\Facades\DB;
+use App\Services\PDFService;
 
 /**
  * Service CotizacionService
@@ -97,15 +98,15 @@ class CotizacionService
         $detallesServicios = $data['detalles_servicios'] ?? [];
         unset($data['detalles_inventario'], $data['detalles_servicios']);
 
-        // 1. num_cotizacion y pdf_cotizacion se generan automáticamente sincronizados
-        // con la fila 'App\Models\Cotizacion' de la tabla secuencias si no vienen definidos.
+        // 1. num_cotizacion se genera automáticamente sincronizado
+        // con la fila 'App\Models\Cotizacion' de la tabla secuencias si no viene definido.
 
         // 2. Establecer estados y fechas por defecto
         $data['tipo'] = $data['tipo'] ?? CotizacionTipo::INICIAL->value;
         $data['estado'] = $data['estado'] ?? CotizacionEstado::PENDIENTE->value;
         $data['fecha_creacion'] = $data['fecha_creacion'] ?? now();
         $data['fecha_vencimiento'] = $data['fecha_vencimiento'] ?? now()->addDays(15);
-        // pdf_cotizacion y num_cotizacion se completan en Cotizacion::booted
+        // num_cotizacion se completa en Cotizacion::booted
 
         // 3. Formatear service_tags de repuestos a reparar si es Reparación:
         // - Si es cotización INICIAL: genera nombres únicos agregando timestamp.
@@ -238,6 +239,12 @@ class CotizacionService
 
         DB::commit();
 
+        // Generar automáticamente el PDF de la cotización y almacenar su ruta
+        $pdfPath = PDFService::generarCotizacionPDF($cotizacion);
+        if ($pdfPath) {
+            $cotizacion->update(['pdf_cotizacion' => $pdfPath]);
+        }
+
         return self::getOne($cotizacion->id_cotizacion);
     }
 
@@ -287,11 +294,11 @@ class CotizacionService
         foreach ($payloadModificacion['insumos'] ?? [] as $ins) {
             $insumosCotizacion[] = [
                 'id_inventario_insumo_saliente' => $ins['id_inventario_insumo_saliente'] ?? $ins['id_inventario'] ?? null,
-                'cantidad'                      => $ins['cantidad'] ?? 1,
-                'precio_unitario_base'          => $ins['precio_unitario_base'] ?? $ins['costo_unitario'] ?? null,
-                'precio_unitario'               => $ins['precio_unitario'] ?? $ins['costo_unitario_con_ganancia'] ?? 0.00,
-                'porcentaje_iva'                => $ins['porcentaje_iva'] ?? 19.00,
-                'service_tag_repuesto_a_reparar'=> $repuesto->service_tag,
+                'cantidad' => $ins['cantidad'] ?? 1,
+                'precio_unitario_base' => $ins['precio_unitario_base'] ?? $ins['costo_unitario'] ?? null,
+                'precio_unitario' => $ins['precio_unitario'] ?? $ins['costo_unitario_con_ganancia'] ?? 0.00,
+                'porcentaje_iva' => $ins['porcentaje_iva'] ?? 19.00,
+                'service_tag_repuesto_a_reparar' => $repuesto->service_tag,
             ];
         }
 
@@ -299,12 +306,12 @@ class CotizacionService
         $serviciosCotizacion = [];
         foreach ($payloadModificacion['servicios'] ?? [] as $srv) {
             $serviciosCotizacion[] = [
-                'id_servicio_taller'            => $srv['id_servicio_taller'],
-                'cantidad'                      => $srv['cantidad'] ?? 1,
-                'precio_unitario_base'          => $srv['precio_unitario_base'] ?? $srv['costo_unitario'] ?? null,
-                'precio_unitario'               => $srv['precio_unitario'] ?? $srv['costo_unitario_con_ganancia'] ?? 0.00,
-                'porcentaje_iva'                => $srv['porcentaje_iva'] ?? 19.00,
-                'service_tag_repuesto_a_reparar'=> $repuesto->service_tag,
+                'id_servicio_taller' => $srv['id_servicio_taller'],
+                'cantidad' => $srv['cantidad'] ?? 1,
+                'precio_unitario_base' => $srv['precio_unitario_base'] ?? $srv['costo_unitario'] ?? null,
+                'precio_unitario' => $srv['precio_unitario'] ?? $srv['costo_unitario_con_ganancia'] ?? 0.00,
+                'porcentaje_iva' => $srv['porcentaje_iva'] ?? 19.00,
+                'service_tag_repuesto_a_reparar' => $repuesto->service_tag,
             ];
         }
 
@@ -483,20 +490,20 @@ class CotizacionService
             if ($insumoExistente) {
                 // Incrementar cantidad existente conservando los costos comerciales cotizados
                 ReparacionInsumoService::update($insumoExistente->id_reparacion_insumo, [
-                    'cantidad'                    => (int) $insumoExistente->cantidad + (int) $detInv->cantidad,
-                    'costo_unitario'              => $detInv->precio_unitario_base,
+                    'cantidad' => (int) $insumoExistente->cantidad + (int) $detInv->cantidad,
+                    'costo_unitario' => $detInv->precio_unitario_base,
                     'costo_unitario_con_ganancia' => $detInv->precio_unitario,
-                    'porcentaje_iva'              => $detInv->porcentaje_iva,
+                    'porcentaje_iva' => $detInv->porcentaje_iva,
                 ]);
             } else {
                 // Registrar nuevo insumo
                 ReparacionInsumoService::create([
-                    'id_reparacion'               => $reparacion->id_reparacion,
-                    'id_inventario'               => $detInv->id_inventario_insumo_saliente,
-                    'cantidad'                    => $detInv->cantidad,
-                    'costo_unitario'              => $detInv->precio_unitario_base,
+                    'id_reparacion' => $reparacion->id_reparacion,
+                    'id_inventario' => $detInv->id_inventario_insumo_saliente,
+                    'cantidad' => $detInv->cantidad,
+                    'costo_unitario' => $detInv->precio_unitario_base,
                     'costo_unitario_con_ganancia' => $detInv->precio_unitario,
-                    'porcentaje_iva'              => $detInv->porcentaje_iva,
+                    'porcentaje_iva' => $detInv->porcentaje_iva,
                 ]);
             }
         }
@@ -510,21 +517,21 @@ class CotizacionService
             if ($servicioExistente) {
                 // Incrementar cantidad existente conservando los costos comerciales cotizados
                 ReparacionServicioTallerService::update($servicioExistente->id_reparacion_servicio_taller, [
-                    'cantidad'                    => (int) $servicioExistente->cantidad + (int) $detServ->cantidad,
-                    'costo_unitario'              => $detServ->precio_unitario_base,
+                    'cantidad' => (int) $servicioExistente->cantidad + (int) $detServ->cantidad,
+                    'costo_unitario' => $detServ->precio_unitario_base,
                     'costo_unitario_con_ganancia' => $detServ->precio_unitario,
-                    'porcentaje_iva'              => $detServ->porcentaje_iva,
+                    'porcentaje_iva' => $detServ->porcentaje_iva,
                 ]);
             } else {
                 // Registrar nuevo servicio
                 ReparacionServicioTallerService::create([
-                    'id_reparacion'               => $reparacion->id_reparacion,
-                    'id_servicio_taller'          => $detServ->id_servicio_taller,
-                    'cantidad'                    => $detServ->cantidad,
-                    'costo_unitario'              => $detServ->precio_unitario_base,
+                    'id_reparacion' => $reparacion->id_reparacion,
+                    'id_servicio_taller' => $detServ->id_servicio_taller,
+                    'cantidad' => $detServ->cantidad,
+                    'costo_unitario' => $detServ->precio_unitario_base,
                     'costo_unitario_con_ganancia' => $detServ->precio_unitario,
-                    'porcentaje_iva'              => $detServ->porcentaje_iva,
-                    'estado'                      => 'pendiente_asignacion',
+                    'porcentaje_iva' => $detServ->porcentaje_iva,
+                    'estado' => 'pendiente_asignacion',
                 ]);
             }
         }
@@ -652,12 +659,12 @@ class CotizacionService
             $reparacion = Reparacion::firstOrCreate(
                 ['id_repuesto' => $repuesto->id_repuesto],
                 [
-                    'id_orden'              => $orden->id_orden,
-                    'estado'                => \App\Enums\ReparacionEstado::PENDIENTE->value,
-                    'fecha_inicio'          => null,
+                    'id_orden' => $orden->id_orden,
+                    'estado' => \App\Enums\ReparacionEstado::PENDIENTE->value,
+                    'fecha_inicio' => null,
                     'id_admin_fecha_inicio' => null,
-                    'fecha_fin'             => null,
-                    'id_admin_fecha_fin'    => null,
+                    'fecha_fin' => null,
+                    'id_admin_fecha_fin' => null,
                 ]
             );
 
@@ -665,12 +672,12 @@ class CotizacionService
             $insumosRep = $cotizacion->detallesInventario->where('service_tag_repuesto_a_reparar', $nomRep);
             foreach ($insumosRep as $ins) {
                 ReparacionInsumoService::create([
-                    'id_reparacion'               => $reparacion->id_reparacion,
-                    'id_inventario'               => $ins->id_inventario_insumo_saliente,
-                    'cantidad'                    => $ins->cantidad,
-                    'costo_unitario'              => $ins->precio_unitario_base,
+                    'id_reparacion' => $reparacion->id_reparacion,
+                    'id_inventario' => $ins->id_inventario_insumo_saliente,
+                    'cantidad' => $ins->cantidad,
+                    'costo_unitario' => $ins->precio_unitario_base,
                     'costo_unitario_con_ganancia' => $ins->precio_unitario,
-                    'porcentaje_iva'              => $ins->porcentaje_iva,
+                    'porcentaje_iva' => $ins->porcentaje_iva,
                 ]);
             }
 
@@ -678,13 +685,13 @@ class CotizacionService
             $serviciosRep = $cotizacion->detallesServiciosTaller->where('service_tag_repuesto_a_reparar', $nomRep);
             foreach ($serviciosRep as $srv) {
                 ReparacionServicioTallerService::create([
-                    'id_reparacion'               => $reparacion->id_reparacion,
-                    'id_servicio_taller'          => $srv->id_servicio_taller,
-                    'cantidad'                    => $srv->cantidad,
-                    'costo_unitario'              => $srv->precio_unitario_base,
+                    'id_reparacion' => $reparacion->id_reparacion,
+                    'id_servicio_taller' => $srv->id_servicio_taller,
+                    'cantidad' => $srv->cantidad,
+                    'costo_unitario' => $srv->precio_unitario_base,
                     'costo_unitario_con_ganancia' => $srv->precio_unitario,
-                    'porcentaje_iva'              => $srv->porcentaje_iva,
-                    'estado'                      => 'pendiente_asignacion',
+                    'porcentaje_iva' => $srv->porcentaje_iva,
+                    'estado' => 'pendiente_asignacion',
                 ]);
             }
         }
