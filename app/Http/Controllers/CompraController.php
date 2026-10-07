@@ -89,6 +89,7 @@ class CompraController extends Controller
             // Seriales opcionales por detalle
             'detalles.*.seriales' => 'nullable|array',
             'detalles.*.seriales.*.serial' => 'nullable|string|max:100',
+            'detalles.*.seriales.*.service_tag' => 'nullable|string|max:100',
             'detalles.*.seriales.*.nombre' => 'nullable|string|max:100',
 
             // Arreglo de pagos (1 a N elementos)

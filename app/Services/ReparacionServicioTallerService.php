@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\DB;
  * Service ReparacionServicioTallerService
  * 
  * Gestiona el ciclo de vida de los servicios de mano de obra en taller:
- * - CreaciÛn y asignaciÛn de tÈcnicos.
- * - TransiciÛn a 'en_proceso' (validando que tenga mec·nicos asignados y pasando orden/reparaciÛn a 'en_proceso').
- * - TransiciÛn a 'finalizado' con verificaciÛn autom·tica de si toda la reparaciÛn concluyÛ.
- * - ValidaciÛn de eliminaciÛn restringida a estados previos a ejecuciÛn.
+ * - CreaciÔøΩn y asignaciÔøΩn de tÔøΩcnicos.
+ * - TransiciÔøΩn a 'en_proceso' (validando que tenga mecÔøΩnicos asignados y pasando orden/reparaciÔøΩn a 'en_proceso').
+ * - TransiciÔøΩn a 'finalizado' con verificaciÔøΩn automÔøΩtica de si toda la reparaciÔøΩn concluyÔøΩ.
+ * - ValidaciÔøΩn de eliminaciÔøΩn restringida a estados previos a ejecuciÔøΩn.
  */
 class ReparacionServicioTallerService
 {
@@ -43,7 +43,7 @@ class ReparacionServicioTallerService
     }
 
     /**
-     * Registra un nuevo servicio en la reparaciÛn y recalcula costos consolidados.
+     * Registra un nuevo servicio en la reparaciÔøΩn y recalcula costos consolidados.
      * Consulta SQL Raw:
      * INSERT INTO reparaciones_servicios_taller (id_reparacion, id_servicio_taller, id_admin, estado, ...) VALUES (...);
      */
@@ -58,7 +58,7 @@ class ReparacionServicioTallerService
 
         $servicio = ReparacionService::registrarServicio($data);
 
-        // Recalcular costos consolidados de la reparaciÛn
+        // Recalcular costos consolidados de la reparaciÔøΩn
         ReparacionService::recalcularCostosReparacion($servicio->id_reparacion);
 
         DB::commit();
@@ -67,9 +67,9 @@ class ReparacionServicioTallerService
     }
 
     /**
-     * Actualiza el servicio de taller, gestionando transiciones autom·ticas de estado:
-     * - A 'en_proceso': Requiere mec·nicos asignados; transiciona la reparaciÛn y la orden a 'en_proceso'.
-     * - A 'finalizado': Asigna fecha de fin y verifica si todos los servicios terminaron para finalizar la reparaciÛn.
+     * Actualiza el servicio de taller, gestionando transiciones automÔøΩticas de estado:
+     * - A 'en_proceso': Requiere mecÔøΩnicos asignados; transiciona la reparaciÔøΩn y la orden a 'en_proceso'.
+     * - A 'finalizado': Asigna fecha de fin y verifica si todos los servicios terminaron para finalizar la reparaciÔøΩn.
      *
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones_servicios_taller WHERE id_reparacion_servicio_taller = $id LIMIT 1;
@@ -90,9 +90,9 @@ class ReparacionServicioTallerService
         $nuevoEstado = $data['estado'] ?? null;
         $estadoStr = $nuevoEstado instanceof TallerEstado ? $nuevoEstado->value : (string) $nuevoEstado;
 
-        // 1. Si se pasa a 'en_proceso' (ejecuciÛn del servicio)
+        // 1. Si se pasa a 'en_proceso' (ejecuciÔøΩn del servicio)
         if ($estadoStr === 'en_proceso') {
-            // Regla: Requiere tener al menos un mec·nico/empleado asignado
+            // Regla: Requiere tener al menos un mecÔøΩnico/empleado asignado
             // Consulta SQL Raw equivalente:
             // SELECT EXISTS(SELECT 1 FROM "asignaciones" WHERE "id_reparacion_servicio_taller" = :id);
             $tieneMecanicos = Asignacion::where('id_reparacion_servicio_taller', $id)->exists();
@@ -104,7 +104,7 @@ class ReparacionServicioTallerService
                 $data['fecha_inicio'] = now();
             }
 
-            // Cambiar autom·ticamente el estado de la reparaciÛn a 'en_proceso' si a˙n estaba pendiente
+            // Cambiar automÔøΩticamente el estado de la reparaciÔøΩn a 'en_proceso' si aÔøΩn estaba pendiente
             $reparacion = Reparacion::find($servicio->id_reparacion);
             if ($reparacion && $reparacion->estado === ReparacionEstado::PENDIENTE) {
                 $reparacion->update([
@@ -114,7 +114,7 @@ class ReparacionServicioTallerService
                 ]);
             }
 
-            // Cambiar autom·ticamente el estado operativo de la orden a 'en_proceso' si a˙n estaba en_espera
+            // Cambiar automÔøΩticamente el estado operativo de la orden a 'en_proceso' si aÔøΩn estaba en_espera
             if ($reparacion && !empty($reparacion->id_orden)) {
                 $orden = Orden::find($reparacion->id_orden);
                 if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
@@ -147,10 +147,10 @@ class ReparacionServicioTallerService
 
         $servicio->update($data);
 
-        // Recalcular costos consolidados de la reparaciÛn
+        // Recalcular costos consolidados de la reparaciÔøΩn
         ReparacionService::recalcularCostosReparacion($servicio->id_reparacion);
 
-        // Si este servicio finalizÛ, verificar si la reparaciÛn completa ya concluyÛ todas sus labores
+        // Si este servicio finalizÔøΩ, verificar si la reparaciÔøΩn completa ya concluyÔøΩ todas sus labores
         if ($estadoStr === 'finalizado') {
             self::verificarFinalizacionReparacion($servicio->id_reparacion);
         }
@@ -177,7 +177,7 @@ class ReparacionServicioTallerService
 
         $estadoStr = $servicio->estado instanceof TallerEstado ? $servicio->estado->value : (string) $servicio->estado;
 
-        // Regla: sÛlo se puede eliminar si se encuentra en pendiente_asignacion o en_espera
+        // Regla: sÔøΩlo se puede eliminar si se encuentra en pendiente_asignacion o en_espera
         if (!in_array($estadoStr, ['pendiente_asignacion', 'en_espera'])) {
             return false;
         }
@@ -193,10 +193,10 @@ class ReparacionServicioTallerService
 
         $servicio->delete();
 
-        // Recalcular costos de la reparaciÛn
+        // Recalcular costos de la reparaciÔøΩn
         ReparacionService::recalcularCostosReparacion($idReparacion);
 
-        // Verificar si tras eliminar este servicio, los que quedan ya est·n todos finalizados
+        // Verificar si tras eliminar este servicio, los que quedan ya estÔøΩn todos finalizados
         self::verificarFinalizacionReparacion($idReparacion);
 
         DB::commit();
@@ -205,37 +205,46 @@ class ReparacionServicioTallerService
     }
 
     /**
-     * Verifica si todas las labores de la reparaciÛn alcanzaron el estado 'finalizado'.
-     * Si no queda ning˙n trabajo pendiente, transiciona autom·ticamente la reparaciÛn a 'finalizada'.
+     * Verifica si todas las labores de la reparaciÔøΩn alcanzaron el estado 'finalizado'.
+     * Si no queda ningÔøΩn trabajo pendiente, transiciona automÔøΩticamente la reparaciÔøΩn a 'finalizada'.
      *
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones_servicios_taller WHERE id_reparacion = $idReparacion;
      * SELECT * FROM reparaciones WHERE id_reparacion = $idReparacion LIMIT 1;
      * UPDATE reparaciones SET estado = 'finalizada', fecha_fin = now() WHERE id_reparacion = $idReparacion;
      */
-    public static function verificarFinalizacionReparacion($idReparacion)
+        /**
+     * Verifica si todas las labores de la reparaci√≥n alcanzaron el estado 'finalizado'.
+     * Retorna true si todos los servicios est√°n finalizados (o no tiene servicios pendientes),
+     * false si a√∫n quedan tareas en espera, en proceso o pendientes de asignaci√≥n.
+     *
+     * Consulta SQL Raw equivalente:
+     * SELECT EXISTS (
+     *     SELECT 1 FROM "reparaciones_servicios_taller" 
+     *     WHERE "id_reparacion" = :idReparacion 
+     *       AND "estado" != 'finalizado'
+     * );
+     */
+    public static function estanTodosLosServiciosFinalizados($idReparacion): bool
     {
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "reparaciones_servicios_taller" WHERE "id_reparacion" = :idReparacion;
         $servicios = ReparacionServicioTaller::where('id_reparacion', $idReparacion)->get();
 
         if ($servicios->isEmpty()) {
-            return;
+            return true;
         }
 
-        // Eval˙a si absolutamente todos los servicios de la colecciÛn tienen estado 'finalizado'
-        $todosFinalizados = $servicios->every(function ($s) {
+        // Eval√∫a si absolutamente todos los servicios de la colecci√≥n tienen estado 'finalizado'
+        return $servicios->every(function ($s) {
             $st = $s->estado instanceof TallerEstado ? $s->estado->value : (string) $s->estado;
             return $st === 'finalizado';
         });
+    }
 
-        if ($todosFinalizados) {
-            $reparacion = Reparacion::find($idReparacion);
-            if ($reparacion && $reparacion->estado !== ReparacionEstado::FINALIZADA) {
-                ReparacionService::update($idReparacion, [
-                    'estado' => ReparacionEstado::FINALIZADA->value,
-                ]);
-            }
-        }
+    public static function verificarFinalizacionReparacion($idReparacion)
+    {
+        // Deprecado: Ya no se auto-finaliza la reparaci√≥n autom√°ticamente.
+        return self::estanTodosLosServiciosFinalizados($idReparacion);
     }
 }

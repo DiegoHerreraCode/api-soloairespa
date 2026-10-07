@@ -96,12 +96,14 @@ class OrdenController extends Controller
             'detalles.*.monto_tasacion'                    => 'nullable|numeric|min:0',
             'detalles.*.porcentaje_iva'                    => 'nullable|numeric|min:0',
             'detalles.*.serial_entrante'                   => 'nullable|string|max:100',
+            'detalles.*.service_tag_entrante'             => 'nullable|string|max:100',
             'detalles.*.nombre_entrante'                   => 'nullable|string|max:100',
 
             // Repuestos que ingresan (para Órdenes de Reparación directa)
             'repuestos_entrantes'                 => 'nullable|array',
             'repuestos_entrantes.*.id_inventario' => 'required_with:repuestos_entrantes|integer|exists:inventario,id_inventario',
             'repuestos_entrantes.*.serial'        => 'nullable|string|max:100',
+            'repuestos_entrantes.*.service_tag'   => 'nullable|string|max:100',
             'repuestos_entrantes.*.nombre'        => 'nullable|string|max:100',
         ]);
 

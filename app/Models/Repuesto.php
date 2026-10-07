@@ -24,7 +24,7 @@ class Repuesto extends ApiModel
         'id_inventario',
         'id_detalle_compra',
         'serial',
-        'nombre',
+        'service_tag',
         'estado',
         'propietario',
         'id_orden_entrada',

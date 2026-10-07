@@ -21,13 +21,13 @@ use Illuminate\Support\Facades\DB;
 /**
  * Service ReparacionService
  * 
- * Gestiona el ciclo completo de reparaciones de taller sobre piezas físicas:
- * - Creación de la orden técnica (en estado inicial 'pendiente').
- * - Carga y sincronización dinámica de insumos y servicios de mano de obra.
- * - Recálculo automático de costos base, margen comercial e IVA.
- * - Transición de estados (pendiente -> en_proceso -> finalizada).
- * - Cierre y liquidación técnica: actualiza repuesto a 'reparado', recalcula inventario
- *   y, si pertenece a una orden de cliente, genera automáticamente las líneas en detalles_ordenes
+ * Gestiona el ciclo completo de reparaciones de taller sobre piezas fï¿½sicas:
+ * - Creaciï¿½n de la orden tï¿½cnica (en estado inicial 'pendiente').
+ * - Carga y sincronizaciï¿½n dinï¿½mica de insumos y servicios de mano de obra.
+ * - Recï¿½lculo automï¿½tico de costos base, margen comercial e IVA.
+ * - Transiciï¿½n de estados (pendiente -> en_proceso -> finalizada).
+ * - Cierre y liquidaciï¿½n tï¿½cnica: actualiza repuesto a 'reparado', recalcula inventario
+ *   y, si pertenece a una orden de cliente, genera automï¿½ticamente las lï¿½neas en detalles_ordenes
  *   y marca la orden de trabajo como 'finalizada'.
  */
 class ReparacionService
@@ -43,7 +43,7 @@ class ReparacionService
     }
 
     /**
-     * Obtiene una reparación específica por su ID.
+     * Obtiene una reparaciï¿½n especï¿½fica por su ID.
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones WHERE id_reparacion = $id LIMIT 1;
      */
@@ -53,10 +53,10 @@ class ReparacionService
     }
 
     /**
-     * Crea una orden de reparación en taller:
+     * Crea una orden de reparaciï¿½n en taller:
      * 1. Nace en estado 'pendiente' sin fechas de inicio.
      * 2. Registra los insumos y servicios iniciales si fueron enviados.
-     * 3. Recalcula y consolida los costos de la reparación.
+     * 3. Recalcula y consolida los costos de la reparaciï¿½n.
      *
      * Consulta SQL Raw:
      * INSERT INTO reparaciones (id_repuesto, estado, ...) VALUES (...);
@@ -72,14 +72,14 @@ class ReparacionService
         $servicios = $data['servicios'] ?? [];
         unset($data['insumos'], $data['servicios']);
 
-        // 1. Toda reparación nace siempre con estado "pendiente" y sin fecha de inicio
+        // 1. Toda reparaciï¿½n nace siempre con estado "pendiente" y sin fecha de inicio
         $data['estado'] = ReparacionEstado::PENDIENTE->value;
         $data['fecha_inicio'] = null;
         $data['id_admin_fecha_inicio'] = null;
         $data['fecha_fin'] = null;
         $data['id_admin_fecha_fin'] = null;
 
-        // 2. Crear cabecera de la reparación
+        // 2. Crear cabecera de la reparaciï¿½n
         $reparacion = Reparacion::create($data);
 
         // 3. Procesar insumos si fueron proporcionados
@@ -103,7 +103,7 @@ class ReparacionService
             }
         }
 
-        // 5. Recalcular costos consolidados de la reparación
+        // 5. Recalcular costos consolidados de la reparaciï¿½n
         self::recalcularCostosReparacion($reparacion->id_reparacion);
 
         DB::commit();
@@ -112,7 +112,7 @@ class ReparacionService
     }
 
     /**
-     * Actualiza la reparación, sincroniza arrays de insumos/servicios y ejecuta el cierre si pasa a 'finalizada'.
+     * Actualiza la reparaciï¿½n, sincroniza arrays de insumos/servicios y ejecuta el cierre si pasa a 'finalizada'.
      *
      * Consulta SQL Raw:
      * UPDATE reparaciones SET estado = ..., fecha_inicio = ... WHERE id_reparacion = $id;
@@ -143,7 +143,7 @@ class ReparacionService
                 $data['id_admin_fecha_inicio'] = auth()->id();
             }
 
-            // Si la reparación pertenece a una orden, poner automáticamente la orden en 'en_proceso'
+            // Si la reparaciï¿½n pertenece a una orden, poner automï¿½ticamente la orden en 'en_proceso'
             if (!empty($reparacion->id_orden)) {
                 $orden = Orden::find($reparacion->id_orden);
                 if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
@@ -169,12 +169,12 @@ class ReparacionService
             $reparacion->update($data);
         }
 
-        // Sincronización inteligente de Insumos si viene el array
+        // Sincronizaciï¿½n inteligente de Insumos si viene el array
         if (is_array($insumos)) {
             self::sincronizarInsumos($reparacion->id_reparacion, $insumos);
         }
 
-        // Sincronización inteligente de Servicios si viene el array
+        // Sincronizaciï¿½n inteligente de Servicios si viene el array
         if (is_array($servicios)) {
             self::sincronizarServicios($reparacion->id_reparacion, $servicios);
         }
@@ -182,7 +182,7 @@ class ReparacionService
         // Recalcular costos tras cualquier cambio en insumos o servicios
         self::recalcularCostosReparacion($reparacion->id_reparacion);
 
-        // Si la reparación quedó finalizada, ejecutar operaciones de cierre y liquidación
+        // Si la reparaciï¿½n quedï¿½ finalizada, ejecutar operaciones de cierre y liquidaciï¿½n
         if ($estadoStr === 'finalizada') {
             self::finalizarReparacionOperaciones($reparacion);
         }
@@ -193,7 +193,7 @@ class ReparacionService
     }
 
     /**
-     * Elimina una reparación revirtiendo los consumos de insumos al inventario y limpiando asignaciones.
+     * Elimina una reparaciï¿½n revirtiendo los consumos de insumos al inventario y limpiando asignaciones.
      * Consulta SQL Raw:
      * UPDATE inventario SET cantidad_total = ..., cantidad_propia = ... WHERE id_inventario = ...;
      * DELETE FROM reparaciones_insumos WHERE id_reparacion = $id;
@@ -244,7 +244,7 @@ class ReparacionService
     }
 
     /**
-     * Sincroniza el listado de insumos de una reparación:
+     * Sincroniza el listado de insumos de una reparaciï¿½n:
      * - Edita existentes y ajusta diferencia de stock en inventario.
      * - Crea nuevos y descuenta stock.
      * - Elimina los omitidos y devuelve su stock al inventario.
@@ -258,6 +258,16 @@ class ReparacionService
 
         foreach ($insumosPayload as $insumoData) {
             $idInsumo = $insumoData['id_reparacion_insumo'] ?? null;
+
+            // Auto-matching: si no vino id_reparacion_insumo, buscar por id_inventario entre los existentes no reclamados
+            if (!$idInsumo && !empty($insumoData['id_inventario'])) {
+                $existente = $insumosActuales->first(function ($item, $key) use ($insumoData, $idsConservados) {
+                    return $item->id_inventario == $insumoData['id_inventario'] && !in_array($key, $idsConservados);
+                });
+                if ($existente) {
+                    $idInsumo = $existente->id_reparacion_insumo;
+                }
+            }
 
             if ($idInsumo && isset($insumosActuales[$idInsumo])) {
                 $idsConservados[] = $idInsumo;
@@ -279,10 +289,10 @@ class ReparacionService
     }
 
     /**
-     * Sincroniza el listado de servicios de taller de una reparación:
+     * Sincroniza el listado de servicios de taller de una reparaciï¿½n:
      * - Edita existentes.
      * - Crea nuevos con estado 'pendiente_asignacion'.
-     * - Elimina los que ya no vienen (siempre que estén en pendiente_asignacion o en_espera).
+     * - Elimina los que ya no vienen (siempre que estï¿½n en pendiente_asignacion o en_espera).
      */
     public static function sincronizarServicios(int $idReparacion, array $serviciosPayload)
     {
@@ -293,6 +303,16 @@ class ReparacionService
 
         foreach ($serviciosPayload as $servicioData) {
             $idServicio = $servicioData['id_reparacion_servicio_taller'] ?? null;
+
+            // Auto-matching: si no vino id_reparacion_servicio_taller, buscar por id_servicio_taller entre los existentes no reclamados
+            if (!$idServicio && !empty($servicioData['id_servicio_taller'])) {
+                $existente = $serviciosActuales->first(function ($item, $key) use ($servicioData, $idsConservados) {
+                    return $item->id_servicio_taller == $servicioData['id_servicio_taller'] && !in_array($key, $idsConservados);
+                });
+                if ($existente) {
+                    $idServicio = $existente->id_reparacion_servicio_taller;
+                }
+            }
 
             if ($idServicio && isset($serviciosActuales[$idServicio])) {
                 $idsConservados[] = $idServicio;
@@ -317,7 +337,7 @@ class ReparacionService
     }
 
     /**
-     * Registra un insumo en la reparación y descuenta el stock de inventario propio.
+     * Registra un insumo en la reparaciï¿½n y descuenta el stock de inventario propio.
      * Consulta SQL Raw:
      * INSERT INTO reparaciones_insumos (...) VALUES (...);
      * UPDATE inventario SET cantidad_total = ..., cantidad_propia = ... WHERE id_inventario = ...;
@@ -372,7 +392,7 @@ class ReparacionService
     }
 
     /**
-     * Registra un servicio de taller en la reparación calculando su subtotal comercial con margen e IVA.
+     * Registra un servicio de taller en la reparaciï¿½n calculando su subtotal comercial con margen e IVA.
      * Consulta SQL Raw:
      * INSERT INTO reparaciones_servicios_taller (...) VALUES (...);
      */
@@ -412,7 +432,7 @@ class ReparacionService
     }
 
     /**
-     * Recalcula y actualiza los costos consolidados de la reparación (base, margen comercial e IVA).
+     * Recalcula y actualiza los costos consolidados de la reparaciï¿½n (base, margen comercial e IVA).
      * Consulta SQL Raw:
      * SELECT SUM(monto_total_linea) FROM reparaciones_insumos WHERE id_reparacion = $idReparacion;
      * SELECT SUM(monto_total_linea) FROM reparaciones_servicios_taller WHERE id_reparacion = $idReparacion;
@@ -456,11 +476,11 @@ class ReparacionService
     }
 
     /**
-     * Operaciones ejecutadas cuando la reparación finaliza:
-     * 1. Actualiza el repuesto físico a estado 'reparado' y consolida sus costos acumulados.
-     * 2. Recalcula métricas de reparación en la tabla inventario.
-     * 3. Si pertenece a una orden de cliente y todos los repuestos están listos:
-     *    - Genera las líneas de cobro en detalles_ordenes con los importes con ganancia.
+     * Operaciones ejecutadas cuando la reparaciï¿½n finaliza:
+     * 1. Actualiza el repuesto fï¿½sico a estado 'reparado' y consolida sus costos acumulados.
+     * 2. Recalcula mï¿½tricas de reparaciï¿½n en la tabla inventario.
+     * 3. Si pertenece a una orden de cliente y todos los repuestos estï¿½n listos:
+     *    - Genera las lï¿½neas de cobro en detalles_ordenes con los importes con ganancia.
      *    - Asigna salida al repuesto y descuenta el stock de cliente.
      *    - Consolida los totales de la orden y pasa su estado operativo a 'finalizada'.
      *
@@ -484,18 +504,18 @@ class ReparacionService
                 'costo_total'                   => $costoAdquisicion + $costoBaseReparacion,
             ]);
 
-            // Actualizar inventario con métricas completas según la Guía de Validación Manual
+            // Actualizar inventario con mï¿½tricas completas segï¿½n la Guï¿½a de Validaciï¿½n Manual
             $item = Inventario::find($repuesto->id_inventario);
             if ($item) {
                 InventarioService::actualizarPorReparacion($item, $costoBaseReparacion);
             }
         }
 
-        // Si la reparación pertenece a una orden de cliente
+        // Si la reparaciï¿½n pertenece a una orden de cliente
         if (!empty($reparacion->id_orden)) {
             $orden = Orden::find($reparacion->id_orden);
             if ($orden) {
-                // Verificar si todavía existen repuestos ingresados en esta orden sin haber culminado su reparación
+                // Verificar si todavï¿½a existen repuestos ingresados en esta orden sin haber culminado su reparaciï¿½n
                 // Consulta SQL Raw equivalente:
                 // SELECT EXISTS(SELECT 1 FROM "repuestos" WHERE "id_orden_entrada" = :id_orden AND "estado" != 'reparado');
                 $quedanRepuestosSinReparar = Repuesto::where('id_orden_entrada', $orden->id_orden)
@@ -503,11 +523,11 @@ class ReparacionService
                     ->exists();
 
                 if ($quedanRepuestosSinReparar) {
-                    // Aún hay repuestos por reparar: la orden permanece en proceso y no se generan líneas de orden todavía
+                    // Aï¿½n hay repuestos por reparar: la orden permanece en proceso y no se generan lï¿½neas de orden todavï¿½a
                     return;
                 }
 
-                // SI TODOS LOS REPUESTOS YA ESTÁN REPARADOS:
+                // SI TODOS LOS REPUESTOS YA ESTï¿½N REPARADOS:
                 // Obtener todas las reparaciones finalizadas de esta orden
                 // Consulta SQL Raw equivalente:
                 // SELECT * FROM "reparaciones" WHERE "id_orden" = :id_orden AND "estado" = 'finalizada';
@@ -520,7 +540,7 @@ class ReparacionService
                 $totalIva = 0.00;
                 $totalNeto = 0.00;
 
-                // Grabar los N registros en detalles_ordenes (uno por cada reparación / repuesto)
+                // Grabar los N registros en detalles_ordenes (uno por cada reparaciï¿½n / repuesto)
                 foreach ($reparacionesOrden as $rep) {
                     $repuestoAsociado = Repuesto::find($rep->id_repuesto);
                     $itemInventario = $repuestoAsociado ? Inventario::find($repuestoAsociado->id_inventario) : null;
@@ -550,7 +570,7 @@ class ReparacionService
                         'monto_total_linea_con_iva'       => $totalLinea,
                     ]);
 
-                    // Asignar salida contable y física del repuesto reparado
+                    // Asignar salida contable y fï¿½sica del repuesto reparado
                     if ($repuestoAsociado) {
                         $costoTotalRep = (float) $repuestoAsociado->costo_total;
                         $repuestoAsociado->update([
@@ -560,7 +580,7 @@ class ReparacionService
                         ]);
                     }
 
-                    // Descontar inventario del cliente (cantidad_total, cantidad_cliente) y registrar métricas históricas
+                    // Descontar inventario del cliente (cantidad_total, cantidad_cliente) y registrar mï¿½tricas histï¿½ricas
                     if ($itemInventario) {
                         InventarioService::actualizarPorReparacionEntrega($itemInventario, 1, $subtotalLinea);
                     }

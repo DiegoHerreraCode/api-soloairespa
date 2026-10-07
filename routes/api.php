@@ -22,6 +22,7 @@ use App\Http\Controllers\ReparacionController;
 use App\Http\Controllers\ReparacionInsumoController;
 use App\Http\Controllers\ReparacionServicioTallerController;
 use App\Http\Controllers\AsignacionController;
+use App\Http\Controllers\CotizacionController;
 
 // Rutas Públicas (Sin Token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -39,6 +40,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/ordenes/{id}/anular', [OrdenController::class, 'anular']);
     Route::patch('/pagos-clientes/{id}/anular', [PagoClienteController::class, 'anular']);
 
+    // Endpoints específicos para Cotizaciones
+    Route::post('/cotizaciones/{id}/aceptar', [CotizacionController::class, 'aceptar']);
+    Route::patch('/cotizaciones/{id}/rechazar', [CotizacionController::class, 'rechazar']);
+    Route::patch('/cotizaciones/{id}/anular', [CotizacionController::class, 'anular']);
+
     Route::apiResources([
         // Capa 1
         'admins'                        => AdminController::class,
@@ -53,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
         'modelos'                       => ModeloController::class,
         'servicios-taller'              => ServicioTallerController::class,
         'compras'                       => CompraController::class,
+        'cotizaciones'                  => CotizacionController::class,
 
         // Capa 3
         'inventario'                    => InventarioController::class,

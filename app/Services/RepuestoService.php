@@ -35,7 +35,7 @@ class RepuestoService
     /**
      * Registra una nueva pieza de repuesto serializada.
      * Consulta SQL Raw:
-     * INSERT INTO repuestos (id_inventario, serial, nombre, estado, propietario, costo_adquisicion, ...) VALUES (...);
+     * INSERT INTO repuestos (id_inventario, serial, service_tag, estado, propietario, costo_adquisicion, ...) VALUES (...);
      */
     public static function create($data)
     {

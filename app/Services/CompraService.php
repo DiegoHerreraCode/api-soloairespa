@@ -18,12 +18,12 @@ use Illuminate\Support\Facades\DB;
  * Service CompraService
  * 
  * Orquesta el flujo integral de compras a proveedores:
- * - Creación de cabecera con desglose de montos gravados, exentos e IVA.
- * - Registro de líneas de compra (detalles_compras).
- * - Aumento de existencias y recálculo ponderado exacto en inventario.
- * - Generación de unidades físicas serializadas (equipos o repuestos nuevos).
- * - Generación de cronograma de pagos pendientes a proveedores.
- * - Reversión de stock y pagos en caso de eliminación.
+ * - Creaciï¿½n de cabecera con desglose de montos gravados, exentos e IVA.
+ * - Registro de lï¿½neas de compra (detalles_compras).
+ * - Aumento de existencias y recï¿½lculo ponderado exacto en inventario.
+ * - Generaciï¿½n de unidades fï¿½sicas serializadas (equipos o repuestos nuevos).
+ * - Generaciï¿½n de cronograma de pagos pendientes a proveedores.
+ * - Reversiï¿½n de stock y pagos en caso de eliminaciï¿½n.
  */
 class CompraService
 {
@@ -69,7 +69,7 @@ class CompraService
         $pagos = $data['pagos'] ?? [];
         unset($data['detalles'], $data['pagos']);
 
-        // 1. Cálculos automáticos de la cabecera si no vienen completos
+        // 1. Cï¿½lculos automï¿½ticos de la cabecera si no vienen completos
         if (!isset($data['monto_total']) && !empty($detalles)) {
             $totalGravado = 0.00;
             $totalExento = 0.00;
@@ -116,7 +116,7 @@ class CompraService
         // 2. Crear cabecera de Compra
         $compra = Compra::create($data);
 
-        // 3. Procesar líneas de compra, serializados e inventario
+        // 3. Procesar lï¿½neas de compra, serializados e inventario
         if (!empty($detalles) && is_array($detalles)) {
             foreach ($detalles as $lineaData) {
                 $seriales = $lineaData['seriales'] ?? [];
@@ -133,7 +133,7 @@ class CompraService
             }
         }
 
-        // 4. Generación de Pagos a Compras a partir del arreglo de pagos (todos nacen con estado "pendiente")
+        // 4. Generaciï¿½n de Pagos a Compras a partir del arreglo de pagos (todos nacen con estado "pendiente")
         self::generarPagosCompra($compra, $pagos);
 
         DB::commit();
@@ -167,7 +167,7 @@ class CompraService
      * - Elimina los pagos asociados.
      * - Elimina los equipos y repuestos serializados generados.
      * - Descuenta las existencias ingresadas del inventario.
-     * - Elimina las líneas de detalle y la cabecera de compra.
+     * - Elimina las lï¿½neas de detalle y la cabecera de compra.
      *
      * Consulta SQL Raw:
      * DELETE FROM pagos_compras WHERE id_compra = $id;
@@ -212,7 +212,7 @@ class CompraService
                     'cantidad_propia' => $nuevaCantidadPropia,
                 ]);
 
-                // Recalcular métricas de compra en inventario
+                // Recalcular mï¿½tricas de compra en inventario
                 InventarioService::recalcularMetricasCompletas($item->id_inventario);
             }
 
@@ -259,7 +259,7 @@ class CompraService
     }
 
     /**
-     * Aumenta el stock y recalcula métricas ponderadas en InventarioService.
+     * Aumenta el stock y recalcula mï¿½tricas ponderadas en InventarioService.
      */
     public static function actualizarInventarioTrasCompra(Inventario $item, int $cantidadComprada, float $costoUnitario)
     {
@@ -267,12 +267,12 @@ class CompraService
     }
 
     /**
-     * Genera automáticamente las piezas físicas serializadas correspondientes a la compra
+     * Genera automï¿½ticamente las piezas fï¿½sicas serializadas correspondientes a la compra
      * (equipos o repuestos nuevos con propietario = true y costo_adquisicion).
      *
      * Consulta SQL Raw:
      * INSERT INTO equipos (id_modelo, id_detalle_compra, serial, nombre) VALUES (...);
-     * INSERT INTO repuestos (id_inventario, id_detalle_compra, serial, nombre, estado, propietario, costo_adquisicion, costo_total) VALUES (...);
+     * INSERT INTO repuestos (id_inventario, id_detalle_compra, serial, service_tag, estado, propietario, costo_adquisicion, costo_total) VALUES (...);
      */
     public static function generarSerializados(DetalleCompra $detalle, Inventario $item, array $seriales = [])
     {
@@ -295,7 +295,7 @@ class CompraService
                     'id_inventario'         => $item->id_inventario,
                     'id_detalle_compra'     => $detalle->id_detalle_compra,
                     'serial'                => $serialData['serial'] ?? null,
-                    'nombre'                => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
+                    'service_tag'           => ($serialData['service_tag'] ?? $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1))) . '_' . now()->format('Ymd_His') . '_' . ($i + 1),
                     'estado'                => 'nuevo',
                     'propietario'           => true,
                     'costo_adquisicion'     => $detalle->costo_unitario,

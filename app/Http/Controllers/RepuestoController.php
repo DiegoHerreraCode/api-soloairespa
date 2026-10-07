@@ -45,7 +45,7 @@ class RepuestoController extends Controller
      * 3. Devuelve el repuesto creado con código HTTP 201.
      *
      * Consultas SQL ejecutadas internamente:
-     * -- INSERT INTO "repuestos" ("id_repuesto", "id_inventario", "serial", "nombre", "estado", "propietario", ...) VALUES (...);
+     * -- INSERT INTO "repuestos" ("id_repuesto", "id_inventario", "serial", "service_tag", "estado", "propietario", ...) VALUES (...);
      *
      * @param Request $request
      * @return JsonResponse
@@ -56,7 +56,7 @@ class RepuestoController extends Controller
             'id_inventario' => 'required|integer|exists:inventario,id_inventario',
             'id_detalle_compra' => 'nullable|integer|exists:detalles_compras,id_detalle_compra',
             'serial' => 'required|string|max:100',
-            'nombre' => 'required|string|max:100',
+            'service_tag' => 'required|string|max:500',
             'estado' => 'required|in:nuevo,reparado,pendiente_reparacion',
             'propietario' => 'nullable|boolean',
             'id_orden_entrada' => 'nullable|integer|exists:ordenes,id_orden',
@@ -124,7 +124,7 @@ class RepuestoController extends Controller
             'id_inventario' => 'integer|exists:inventario,id_inventario',
             'id_detalle_compra' => 'nullable|integer|exists:detalles_compras,id_detalle_compra',
             'serial' => 'string|max:100',
-            'nombre' => 'string|max:100',
+            'service_tag' => 'string|max:500',
             'estado' => 'in:nuevo,reparado,pendiente_reparacion',
             'propietario' => 'boolean',
             'id_orden_entrada' => 'nullable|integer|exists:ordenes,id_orden',
@@ -142,7 +142,7 @@ class RepuestoController extends Controller
             !$request->has('id_inventario') &&
             !$request->has('id_detalle_compra') &&
             !$request->has('serial') &&
-            !$request->has('nombre') &&
+            !$request->has('service_tag') &&
             !$request->has('estado') &&
             !$request->has('propietario') &&
             !$request->has('id_orden_entrada') &&

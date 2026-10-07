@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReparacionService;
+use App\Services\ReparacionServicioTallerService;
+use App\Services\CotizacionService;
 use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,43 +66,44 @@ class ReparacionController extends Controller
     {
         $request->validate([
             // Cabecera
-            'id_repuesto'                  => 'required|integer|exists:repuestos,id_repuesto',
-            'id_orden'                     => 'nullable|integer|exists:ordenes,id_orden',
-            'estado'                       => 'nullable|in:pendiente,en_proceso,finalizada',
-            'fecha_inicio'                 => 'nullable|date',
-            'id_admin_fecha_inicio'        => 'nullable|integer|exists:admins,id_admin',
-            'fecha_fin'                    => 'nullable|date',
-            'id_admin_fecha_fin'           => 'nullable|integer|exists:admins,id_admin',
-            'costo_servicios_base'         => 'nullable|numeric|min:0',
-            'costo_insumos_base'           => 'nullable|numeric|min:0',
+            'id_repuesto' => 'required|integer|exists:repuestos,id_repuesto',
+            'id_orden' => 'nullable|integer|exists:ordenes,id_orden',
+            'estado' => 'nullable|in:pendiente,en_proceso,finalizada',
+            'fecha_inicio' => 'nullable|date',
+            'id_admin_fecha_inicio' => 'nullable|integer|exists:admins,id_admin',
+            'fecha_fin' => 'nullable|date',
+            'id_admin_fecha_fin' => 'nullable|integer|exists:admins,id_admin',
+            'costo_servicios_base' => 'nullable|numeric|min:0',
+            'costo_insumos_base' => 'nullable|numeric|min:0',
             'costo_servicios_con_ganancia' => 'nullable|numeric|min:0',
-            'costo_insumos_con_ganancia'   => 'nullable|numeric|min:0',
-            'costo_total'                  => 'nullable|numeric|min:0',
-            'costo_total_con_ganancia'     => 'nullable|numeric|min:0',
-            'monto_total_iva'              => 'nullable|numeric|min:0',
+            'costo_insumos_con_ganancia' => 'nullable|numeric|min:0',
+            'costo_total' => 'nullable|numeric|min:0',
+            'costo_total_con_ganancia' => 'nullable|numeric|min:0',
+            'monto_total_iva' => 'nullable|numeric|min:0',
 
-            // Arreglo opcional de insumos
-            'insumos'                                  => 'nullable|array',
-            'insumos.*.id_inventario'                  => 'required_with:insumos|integer|exists:inventario,id_inventario',
-            'insumos.*.cantidad'                       => 'required_with:insumos|integer|min:1',
-            'insumos.*.costo_unitario'                 => 'nullable|numeric|min:0',
-            'insumos.*.monto_total_linea'              => 'nullable|numeric|min:0',
-            'insumos.*.costo_unitario_con_ganancia'    => 'nullable|numeric|min:0',
-            'insumos.*.monto_total_linea_con_ganancia' => 'nullable|numeric|min:0',
-            'insumos.*.porcentaje_iva'                 => 'nullable|numeric|min:0',
-            'insumos.*.monto_iva'                      => 'nullable|numeric|min:0',
+            // Arreglo opcional de insumos (para sincronización unificada o cotización extra)
+            'insumos' => 'nullable|array',
+            'insumos.*.id_reparacion_insumo' => 'nullable|integer|exists:reparaciones_insumos,id_reparacion_insumo',
+            'insumos.*.id_inventario' => 'required_with:insumos|integer|exists:inventario,id_inventario',
+            'insumos.*.id_inventario_insumo_saliente' => 'nullable|integer|exists:inventario,id_inventario',
+            'insumos.*.cantidad' => 'required_with:insumos|integer|min:1',
+            'insumos.*.costo_unitario' => 'nullable|numeric|min:0',
+            'insumos.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
+            'insumos.*.precio_unitario_base' => 'nullable|numeric|min:0',
+            'insumos.*.precio_unitario' => 'nullable|numeric|min:0',
+            'insumos.*.porcentaje_iva' => 'nullable|numeric|min:0',
 
-            // Arreglo opcional de servicios
-            'servicios'                                  => 'nullable|array',
-            'servicios.*.id_servicio_taller'             => 'required_with:servicios|integer|exists:servicios_taller,id_servicio_taller',
-            'servicios.*.cantidad'                       => 'required_with:servicios|integer|min:1',
-            'servicios.*.costo_unitario'                 => 'nullable|numeric|min:0',
-            'servicios.*.monto_total_linea'              => 'nullable|numeric|min:0',
-            'servicios.*.costo_unitario_con_ganancia'    => 'nullable|numeric|min:0',
-            'servicios.*.monto_total_linea_con_ganancia' => 'nullable|numeric|min:0',
-            'servicios.*.porcentaje_iva'                 => 'nullable|numeric|min:0',
-            'servicios.*.monto_iva'                      => 'nullable|numeric|min:0',
-            'servicios.*.estado'                         => 'nullable|in:pendiente_asignacion,en_espera,en_proceso,finalizado',
+            // Arreglo opcional de servicios (para sincronización unificada o cotización extra)
+            'servicios' => 'nullable|array',
+            'servicios.*.id_reparacion_servicio_taller' => 'nullable|integer|exists:reparaciones_servicios_taller,id_reparacion_servicio_taller',
+            'servicios.*.id_servicio_taller' => 'required_with:servicios|integer|exists:servicios_taller,id_servicio_taller',
+            'servicios.*.cantidad' => 'required_with:servicios|integer|min:1',
+            'servicios.*.costo_unitario' => 'nullable|numeric|min:0',
+            'servicios.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
+            'servicios.*.precio_unitario_base' => 'nullable|numeric|min:0',
+            'servicios.*.precio_unitario' => 'nullable|numeric|min:0',
+            'servicios.*.porcentaje_iva' => 'nullable|numeric|min:0',
+            'servicios.*.estado' => 'nullable|in:pendiente_asignacion,en_espera,en_proceso,finalizado',
         ]);
 
         $data = $request->all();
@@ -163,41 +166,51 @@ class ReparacionController extends Controller
      */
     public function update(Request $request, $id): JsonResponse
     {
+        // Normalizar id_inventario_insumo_saliente si vino con nomenclatura de cotización
+        if ($request->has('insumos') && is_array($request->input('insumos'))) {
+            $insumosNorm = array_map(function ($ins) {
+                if (!isset($ins['id_inventario']) && isset($ins['id_inventario_insumo_saliente'])) {
+                    $ins['id_inventario'] = $ins['id_inventario_insumo_saliente'];
+                }
+                return $ins;
+            }, $request->input('insumos'));
+            $request->merge(['insumos' => $insumosNorm]);
+        }
         $request->validate([
             // Cabecera
-            'id_repuesto'                  => 'integer|exists:repuestos,id_repuesto',
-            'id_orden'                     => 'integer|exists:ordenes,id_orden',
-            'estado'                       => 'in:pendiente,en_proceso,finalizada',
-            'fecha_inicio'                 => 'nullable|date',
-            'id_admin_fecha_inicio'        => 'integer|exists:admins,id_admin',
-            'fecha_fin'                    => 'nullable|date',
-            'id_admin_fecha_fin'           => 'integer|exists:admins,id_admin',
-            'costo_servicios_base'         => 'numeric|min:0',
-            'costo_insumos_base'           => 'numeric|min:0',
+            'id_repuesto' => 'integer|exists:repuestos,id_repuesto',
+            'id_orden' => 'integer|exists:ordenes,id_orden',
+            'estado' => 'in:pendiente,en_proceso,finalizada',
+            'fecha_inicio' => 'nullable|date',
+            'id_admin_fecha_inicio' => 'integer|exists:admins,id_admin',
+            'fecha_fin' => 'nullable|date',
+            'id_admin_fecha_fin' => 'integer|exists:admins,id_admin',
+            'costo_servicios_base' => 'numeric|min:0',
+            'costo_insumos_base' => 'numeric|min:0',
             'costo_servicios_con_ganancia' => 'numeric|min:0',
-            'costo_insumos_con_ganancia'   => 'numeric|min:0',
-            'costo_total'                  => 'numeric|min:0',
-            'costo_total_con_ganancia'     => 'numeric|min:0',
-            'monto_total_iva'              => 'numeric|min:0',
+            'costo_insumos_con_ganancia' => 'numeric|min:0',
+            'costo_total' => 'numeric|min:0',
+            'costo_total_con_ganancia' => 'numeric|min:0',
+            'monto_total_iva' => 'numeric|min:0',
 
             // Arreglo opcional de insumos (para sincronización unificada)
-            'insumos'                                  => 'nullable|array',
-            'insumos.*.id_reparacion_insumo'           => 'nullable|integer|exists:reparaciones_insumos,id_reparacion_insumo',
-            'insumos.*.id_inventario'                  => 'required_with:insumos|integer|exists:inventario,id_inventario',
-            'insumos.*.cantidad'                       => 'required_with:insumos|integer|min:1',
-            'insumos.*.costo_unitario'                 => 'nullable|numeric|min:0',
-            'insumos.*.costo_unitario_con_ganancia'    => 'nullable|numeric|min:0',
-            'insumos.*.porcentaje_iva'                 => 'nullable|numeric|min:0',
+            'insumos' => 'nullable|array',
+            'insumos.*.id_reparacion_insumo' => 'nullable|integer|exists:reparaciones_insumos,id_reparacion_insumo',
+            'insumos.*.id_inventario' => 'required_with:insumos|integer|exists:inventario,id_inventario',
+            'insumos.*.cantidad' => 'required_with:insumos|integer|min:1',
+            'insumos.*.costo_unitario' => 'nullable|numeric|min:0',
+            'insumos.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
+            'insumos.*.porcentaje_iva' => 'nullable|numeric|min:0',
 
             // Arreglo opcional de servicios (para sincronización unificada)
-            'servicios'                                  => 'nullable|array',
-            'servicios.*.id_reparacion_servicio_taller'  => 'nullable|integer|exists:reparaciones_servicios_taller,id_reparacion_servicio_taller',
-            'servicios.*.id_servicio_taller'             => 'required_with:servicios|integer|exists:servicios_taller,id_servicio_taller',
-            'servicios.*.cantidad'                       => 'required_with:servicios|integer|min:1',
-            'servicios.*.costo_unitario'                 => 'nullable|numeric|min:0',
-            'servicios.*.costo_unitario_con_ganancia'    => 'nullable|numeric|min:0',
-            'servicios.*.porcentaje_iva'                 => 'nullable|numeric|min:0',
-            'servicios.*.estado'                         => 'nullable|in:pendiente_asignacion,en_espera,en_proceso,finalizado',
+            'servicios' => 'nullable|array',
+            'servicios.*.id_reparacion_servicio_taller' => 'nullable|integer|exists:reparaciones_servicios_taller,id_reparacion_servicio_taller',
+            'servicios.*.id_servicio_taller' => 'required_with:servicios|integer|exists:servicios_taller,id_servicio_taller',
+            'servicios.*.cantidad' => 'required_with:servicios|integer|min:1',
+            'servicios.*.costo_unitario' => 'nullable|numeric|min:0',
+            'servicios.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
+            'servicios.*.porcentaje_iva' => 'nullable|numeric|min:0',
+            'servicios.*.estado' => 'nullable|in:pendiente_asignacion,en_espera,en_proceso,finalizado',
         ]);
 
         if (
@@ -225,6 +238,69 @@ class ReparacionController extends Controller
 
         $data = $request->all();
 
+        // 1. Si la petición solicita explícitamente generar una cotización extra/hija (Opción B)
+        if ($request->boolean('crear_cotizacion_extra')) {
+            $rep = ReparacionService::getOne($id);
+            if (!$rep) {
+                return $this->errorResponse('Reparación no encontrada', 404);
+            }
+            if (empty($rep->id_orden)) {
+                return $this->errorResponse('La reparación debe estar vinculada a una orden para generar cotización extra', 422);
+            }
+
+            $resultado = CotizacionService::crearCotizacionExtraDesdeReparacion(
+                $rep->id_orden,
+                $rep->id_repuesto,
+                $data
+            );
+
+            if (is_string($resultado)) {
+                return $this->errorResponse($resultado, 422);
+            }
+
+            return $this->successResponse($resultado, 'Cotización extra generada exitosamente. Los cambios se aplicarán cuando el cliente la acepte.', 201);
+        }
+
+        // 2. Validación de reglas operativas para Reparaciones
+        $repActual = ReparacionService::getOne($id);
+        if (!$repActual) {
+            return $this->errorResponse('Reparación no encontrada', 404);
+        }
+
+        $serviceTag = $repActual->repuesto ? $repActual->repuesto->service_tag : null;
+        $tieneCotizacionExtraPendiente = false;
+        if (!empty($repActual->id_orden) && !empty($serviceTag)) {
+            $tieneCotizacionExtraPendiente = CotizacionService::tieneCotizacionExtraPendiente($repActual->id_orden, $serviceTag);
+        }
+
+        // Regla: si el administrador intenta marcar la reparación como 'finalizada':
+        if (isset($data['estado']) && $data['estado'] === 'finalizada') {
+            // Condición A: Todos los servicios de la reparación deben estar finalizados
+            if (!ReparacionServicioTallerService::estanTodosLosServiciosFinalizados($id)) {
+                return $this->errorResponse(
+                    'No se puede finalizar la reparación porque aún tiene servicios de taller pendientes o en proceso.',
+                    422
+                );
+            }
+
+            // Condición B: No debe tener ninguna cotización extra pendiente para este repuesto
+            if ($tieneCotizacionExtraPendiente) {
+                return $this->errorResponse(
+                    "No se puede finalizar la reparación mientras exista una cotización extra pendiente de aprobación por el cliente para este repuesto ({$serviceTag}).",
+                    422
+                );
+            }
+        }
+
+        // Regla: No alterar estructura de insumos o servicios directamente si hay cotización extra pendiente
+        if ($tieneCotizacionExtraPendiente && $request->hasAny(['insumos', 'servicios', 'costo_insumos_base', 'costo_servicios_base'])) {
+            return $this->errorResponse(
+                "No se pueden modificar insumos ni servicios directamente mientras exista una cotización extra pendiente de aprobación por el cliente para este repuesto ({$serviceTag}).",
+                422
+            );
+        }
+
+        // 3. Ejecutar guardado directo en ReparacionService
         $reparacion = ReparacionService::update($id, $data);
         if (!$reparacion) {
             return $this->errorResponse('Reparación no encontrada', 404);

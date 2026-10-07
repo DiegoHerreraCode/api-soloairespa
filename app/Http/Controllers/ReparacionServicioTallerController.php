@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReparacionServicioTallerService;
+use App\Services\CotizacionService;
+use App\Models\ReparacionServicioTaller;
+use App\Models\Reparacion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
