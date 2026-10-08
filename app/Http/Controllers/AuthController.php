@@ -69,6 +69,7 @@ class AuthController extends Controller
         ], 'Bienvenido', 'emails.register', ['nombre' => $user->name, 'email' => $user->email, 'password' => $request->password]);
 
         $data['id_user'] = $user->id;
+        $data['nombre'] = $user->name;
 
         $admin = AdminService::create($data);
 
