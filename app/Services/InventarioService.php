@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Inventario;
+use App\Models\Admin;
+use App\Services\MailerService;
 use App\Models\DetalleCompra;
 use App\Models\DetalleOrden;
 use App\Models\Reparacion;
@@ -70,6 +72,7 @@ class InventarioService
         $item = Inventario::create($data);
 
         DB::commit();
+        self::verificarYNotificarStockBajo($item);
         return $item;
     }
 
@@ -96,6 +99,7 @@ class InventarioService
         $item->update($data);
 
         DB::commit();
+        self::verificarYNotificarStockBajo($item);
         return $item;
     }
 
@@ -466,5 +470,69 @@ class InventarioService
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "inventario" WHERE "id_inventario" = :idInventario LIMIT 1;
         return $item->fresh();
+    }
+
+    /**
+     * Evalúa una lista de ítems de inventario tras una operación de entrada o salida,
+     * y si alguno quedó por debajo de su stock mínimo, notifica individualmente a cada admin.
+     *
+     * @param mixed $items Colección, arreglo de modelos Inventario o IDs de inventario
+     * @return void
+     */
+    public static function verificarYNotificarStockBajo($items): void
+    {
+        if (empty($items)) {
+            return;
+        }
+
+        if (!is_iterable($items)) {
+            $items = [$items];
+        }
+
+        $itemsEnRiesgo = [];
+
+        foreach ($items as $item) {
+            if (!$item instanceof Inventario) {
+                $item = Inventario::find($item);
+            }
+            if (!$item) {
+                continue;
+            }
+
+            // Condición: cantidad_propia estrictamente menor a stock_minimo
+            if ($item->stock_minimo !== null && (int) $item->cantidad_propia < (int) $item->stock_minimo) {
+                $tipoStr = $item->tipo ? (is_object($item->tipo) ? ($item->tipo->value ?? (string) $item->tipo) : (string) $item->tipo) : 'item';
+                $itemsEnRiesgo[$item->id_inventario] = [
+                    'sku'             => $item->sku,
+                    'nombre'          => $item->nombre,
+                    'tipo'            => ucfirst(strtolower($tipoStr)),
+                    'cantidad_propia' => (int) $item->cantidad_propia,
+                    'stock_minimo'    => (int) $item->stock_minimo,
+                ];
+            }
+        }
+
+        if (empty($itemsEnRiesgo)) {
+            return;
+        }
+
+        $admins = Admin::with('user')->get();
+
+        foreach ($admins as $admin) {
+            $email = $admin->user?->email;
+            if (!$email) {
+                continue;
+            }
+
+            MailerService::enviarCorreo(
+                ['to' => [$email]],
+                'Alerta: Items de Inventario Bajo Stock Mínimo',
+                'emails.stock_bajo',
+                [
+                    'admin_nombre' => $admin->nombre,
+                    'items'        => array_values($itemsEnRiesgo),
+                ]
+            );
+        }
     }
 }

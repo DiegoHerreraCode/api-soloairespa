@@ -126,6 +126,7 @@ class ReparacionService
         }
 
         DB::beginTransaction();
+        $insumosAfectadosIds = [];
 
         $insumos = $data['insumos'] ?? null;
         $servicios = $data['servicios'] ?? null;
@@ -171,7 +172,7 @@ class ReparacionService
 
         // Sincronizaci�n inteligente de Insumos si viene el array
         if (is_array($insumos)) {
-            self::sincronizarInsumos($reparacion->id_reparacion, $insumos);
+            $insumosAfectadosIds = self::sincronizarInsumos($reparacion->id_reparacion, $insumos);
         }
 
         // Sincronizaci�n inteligente de Servicios si viene el array
@@ -188,6 +189,10 @@ class ReparacionService
         }
 
         DB::commit();
+
+        if (!empty($insumosAfectadosIds)) {
+            InventarioService::verificarYNotificarStockBajo($insumosAfectadosIds);
+        }
 
         return $reparacion->fresh();
     }
@@ -213,6 +218,7 @@ class ReparacionService
         // Revertir stock de insumos antes de eliminar
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "reparaciones_insumos" WHERE "id_reparacion" = :id;
+        $insumosAfectadosIds = [];
         $insumos = ReparacionInsumo::where('id_reparacion', $id)->get();
         foreach ($insumos as $insumo) {
             $item = Inventario::find($insumo->id_inventario);
@@ -222,6 +228,7 @@ class ReparacionService
                     'cantidad_propia' => (int) $item->cantidad_propia + (int) $insumo->cantidad,
                 ]);
             }
+            $insumosAfectadosIds[] = $insumo->id_inventario;
             $insumo->delete();
         }
 
@@ -240,6 +247,10 @@ class ReparacionService
 
         DB::commit();
 
+        if (!empty($insumosAfectadosIds)) {
+            InventarioService::verificarYNotificarStockBajo(array_values(array_unique($insumosAfectadosIds)));
+        }
+
         return $reparacion;
     }
 
@@ -249,12 +260,13 @@ class ReparacionService
      * - Crea nuevos y descuenta stock.
      * - Elimina los omitidos y devuelve su stock al inventario.
      */
-    public static function sincronizarInsumos(int $idReparacion, array $insumosPayload)
+    public static function sincronizarInsumos(int $idReparacion, array $insumosPayload): array
     {
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "reparaciones_insumos" WHERE "id_reparacion" = :idReparacion;
         $insumosActuales = ReparacionInsumo::where('id_reparacion', $idReparacion)->get()->keyBy('id_reparacion_insumo');
         $idsConservados = [];
+        $idsInventariosAfectados = [];
 
         foreach ($insumosPayload as $insumoData) {
             $idInsumo = $insumoData['id_reparacion_insumo'] ?? null;
@@ -271,21 +283,25 @@ class ReparacionService
 
             if ($idInsumo && isset($insumosActuales[$idInsumo])) {
                 $idsConservados[] = $idInsumo;
+                $idsInventariosAfectados[] = $insumosActuales[$idInsumo]->id_inventario;
                 ReparacionInsumoService::update($idInsumo, $insumoData);
             } else {
                 $insumoData['id_reparacion'] = $idReparacion;
                 $insumoData['id_admin'] = $insumoData['id_admin'] ?? auth()->id() ?? 1;
                 $nuevo = self::registrarInsumo($insumoData);
                 $idsConservados[] = $nuevo->id_reparacion_insumo;
+                $idsInventariosAfectados[] = $nuevo->id_inventario;
             }
         }
 
         // Eliminar insumos que estaban antes pero ya no vienen en el payload
         foreach ($insumosActuales as $idInsumo => $insumo) {
             if (!in_array($idInsumo, $idsConservados)) {
+                $idsInventariosAfectados[] = $insumo->id_inventario;
                 ReparacionInsumoService::delete($idInsumo);
             }
         }
+        return array_values(array_unique($idsInventariosAfectados));
     }
 
     /**

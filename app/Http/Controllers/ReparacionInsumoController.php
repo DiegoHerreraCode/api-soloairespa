@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReparacionInsumoService;
+use App\Services\InventarioService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -73,6 +74,8 @@ class ReparacionInsumoController extends Controller
         if (!$insumo) {
             return $this->errorResponse('Insumo no creado', 404);
         }
+
+        InventarioService::verificarYNotificarStockBajo($insumo->id_inventario);
 
         return $this->successResponse($insumo, 'Insumo agregado a la reparación correctamente', 201);
     }
@@ -148,6 +151,8 @@ class ReparacionInsumoController extends Controller
             return $this->errorResponse('Insumo no encontrado', 404);
         }
 
+        InventarioService::verificarYNotificarStockBajo($insumo->id_inventario);
+
         return $this->successResponse($insumo, 'Insumo actualizado correctamente');
     }
 
@@ -173,6 +178,8 @@ class ReparacionInsumoController extends Controller
         if (!$insumo) {
             return $this->errorResponse('Insumo no encontrado o no se pudo eliminar', 404);
         }
+
+        InventarioService::verificarYNotificarStockBajo($insumo->id_inventario);
 
         return $this->successResponse(null, 'Insumo eliminado y stock devuelto exitosamente');
     }

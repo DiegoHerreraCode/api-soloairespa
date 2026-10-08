@@ -214,6 +214,7 @@ class CompraService
 
                 // Recalcular m�tricas de compra en inventario
                 InventarioService::recalcularMetricasCompletas($item->id_inventario);
+                $itemsAfectados[] = $item;
             }
 
             $detalle->delete();
@@ -222,6 +223,11 @@ class CompraService
         $compra->delete();
 
         DB::commit();
+
+        // Notificar stock bajo a los administradores si algún ítem quedó por debajo de su mínimo
+        if (!empty($itemsAfectados)) {
+            InventarioService::verificarYNotificarStockBajo($itemsAfectados);
+        }
 
         return $compra;
     }

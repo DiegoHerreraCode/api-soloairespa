@@ -99,16 +99,22 @@ class OrdenService
 
         $orden = Orden::create($data);
 
-        // 2. Procesar seg�n el tipo de orden
+                $inventariosAfectadosIds = [];
+
+        // 2. Procesar según el tipo de orden
         if ($nombreTipo === 'venta') {
-            self::procesarVenta($orden, $detalles);
+            $inventariosAfectadosIds = self::procesarVenta($orden, $detalles);
         } elseif ($nombreTipo === 'recambio') {
-            self::procesarRecambio($orden, $detalles);
+            $inventariosAfectadosIds = self::procesarRecambio($orden, $detalles);
         } elseif ($nombreTipo === 'reparacion') {
             self::procesarRecepcionReparacion($orden, $repuestosEntrantes);
         }
 
         DB::commit();
+
+        if (!empty($inventariosAfectadosIds)) {
+            InventarioService::verificarYNotificarStockBajo($inventariosAfectadosIds);
+        }
 
         return $orden->fresh();
     }
@@ -181,8 +187,9 @@ class OrdenService
      * UPDATE repuestos SET id_orden_salida = ..., monto_venta_real = ..., utilidad = ... WHERE id_repuesto = ...;
      * UPDATE ordenes SET monto_total = ..., monto_pendiente = ... WHERE id_orden = ...;
      */
-    public static function procesarVenta(Orden $orden, array $detalles)
+    public static function procesarVenta(Orden $orden, array $detalles): array
     {
+        $inventariosAfectados = [];
         $totalGravado = 0.00;
         $totalExento = 0.00;
         $totalIva = 0.00;
@@ -218,6 +225,7 @@ class OrdenService
 
                 // Descontar inmediatamente inventario y registrar m�tricas de venta
                 if ($item) {
+                    $inventariosAfectados[] = $item->id_inventario;
                     InventarioService::actualizarPorVenta($item, $cantidad, $precioUnitario);
                 }
 
@@ -315,6 +323,7 @@ class OrdenService
 
                     // Actualizar inventario por cada unidad vendida
                     if ($item) {
+                        $inventariosAfectados[] = $item->id_inventario;
                         InventarioService::actualizarPorVenta($item, 1, $precioUnitario);
                     }
 
@@ -336,6 +345,8 @@ class OrdenService
             'monto_total'         => round($totalNeto, 2),
             'monto_pendiente'     => round($totalNeto, 2),
         ]);
+
+        return array_values(array_unique($inventariosAfectados));
     }
 
     /**
@@ -349,8 +360,9 @@ class OrdenService
      * INSERT INTO detalles_ordenes (id_orden, id_repuesto_saliente, id_repuesto_entrante, precio_unitario, monto_tasacion, ...) VALUES (...);
      * UPDATE repuestos SET id_orden_salida = ... WHERE id_repuesto = ...;
      */
-    public static function procesarRecambio(Orden $orden, array $detalles)
+    public static function procesarRecambio(Orden $orden, array $detalles): array
     {
+        $inventariosAfectados = [];
         $totalGravado = 0.00;
         $totalExento = 0.00;
         $totalIva = 0.00;
@@ -436,6 +448,7 @@ class OrdenService
             // 4. ACTUALIZAR M�TRICAS DE INVENTARIO:
             // Salida de la venta (actualiza m�tricas de venta ponderadas y descuenta stock propio)
             if ($itemSaliente) {
+                $inventariosAfectados[] = $itemSaliente->id_inventario;
                 InventarioService::actualizarPorVenta($itemSaliente, 1, $precioUnitario);
             }
 
@@ -446,6 +459,7 @@ class OrdenService
 
             // Entrada por tasaci�n (actualiza m�tricas de adquisici�n/compra de usado y suma stock propio)
             if ($itemEntrante) {
+                $inventariosAfectados[] = $itemEntrante->id_inventario;
                 InventarioService::actualizarPorCompra($itemEntrante, 1, $montoTasacion);
             }
 
@@ -465,6 +479,8 @@ class OrdenService
             'monto_total'         => round($totalNeto, 2),
             'monto_pendiente'     => round($totalNeto, 2),
         ]);
+
+        return array_values(array_unique($inventariosAfectados));
     }
 
     /**
@@ -734,6 +750,11 @@ class OrdenService
         }
 
         DB::commit();
+
+        // 5. NOTIFICAR STOCK BAJO SI ALGÚN ÍTEM QUEDÓ POR DEBAJO DE SU MÍNIMO
+        if (!empty($inventariosAfectados)) {
+            InventarioService::verificarYNotificarStockBajo(array_keys($inventariosAfectados));
+        }
 
         return $orden->fresh();
     }

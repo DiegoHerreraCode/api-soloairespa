@@ -17,6 +17,7 @@ use App\Enums\CotizacionEstado;
 use App\Enums\OrdenEstadoOperativo;
 use Illuminate\Support\Facades\DB;
 use App\Services\PDFService;
+use App\Services\InventarioService;
 
 /**
  * Service CotizacionService
@@ -412,6 +413,19 @@ class CotizacionService
             ]);
 
             DB::commit();
+
+            $idsInventarioAfectados = $cotizacion->detallesInventario
+                ->pluck('id_inventario_insumo_saliente')
+                ->merge($cotizacion->detallesInventario->pluck('id_inventario_repuesto_saliente'))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if (!empty($idsInventarioAfectados)) {
+                InventarioService::verificarYNotificarStockBajo($idsInventarioAfectados);
+            }
+
             return self::getOne($cotizacion->id_cotizacion);
         }
 
@@ -444,6 +458,18 @@ class CotizacionService
         ]);
 
         DB::commit();
+
+        $idsInventarioAfectados = $cotizacion->detallesInventario
+            ->pluck('id_inventario_insumo_saliente')
+            ->merge($cotizacion->detallesInventario->pluck('id_inventario_repuesto_saliente'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (!empty($idsInventarioAfectados)) {
+            InventarioService::verificarYNotificarStockBajo($idsInventarioAfectados);
+        }
 
         return self::getOne($cotizacion->id_cotizacion);
     }
@@ -638,6 +664,7 @@ class CotizacionService
             'id_admin' => $cotizacion->id_admin,
             'estado_operativo' => OrdenEstadoOperativo::EN_ESPERA->value,
             'repuestos_entrantes' => $repuestosEntrantes,
+            'fecha_entrega_reparacion' => $data['fecha_entrega_reparacion'] ?? null,
         ];
 
         $orden = OrdenService::create($ordenData);
