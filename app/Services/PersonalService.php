@@ -8,25 +8,25 @@ use Illuminate\Support\Facades\DB;
 /**
  * Service PersonalService
  * 
- * Gestiona el personal operativo y técnico del taller.
- * Implementa borrado lógico mediante la columna "is_deleted".
+ * Gestiona el personal operativo y tï¿½cnico del taller.
+ * Implementa borrado lï¿½gico mediante la columna "is_deleted".
  */
 class PersonalService
 {
     /**
      * Obtiene el personal activo (no eliminado).
      * Consulta SQL Raw:
-     * SELECT * FROM personal WHERE is_deleted = false;
+     * SELECT * FROM personal;
      */
     public static function getAll()
     {
         // Consulta SQL Raw equivalente:
-        // SELECT * FROM "personal" WHERE "is_deleted" = false;
-        return Personal::where('is_deleted', false)->get();
+        // SELECT * FROM "personal";
+        return Personal::get();
     }
 
     /**
-     * Obtiene un trabajador técnico por ID.
+     * Obtiene un trabajador tï¿½cnico por ID.
      * Consulta SQL Raw:
      * SELECT * FROM personal WHERE id_personal = $id LIMIT 1;
      */
@@ -43,6 +43,8 @@ class PersonalService
     public static function create($data)
     {
         DB::beginTransaction();
+        $data['disponible'] = true;
+        $data['is_deleted'] = false;
         $personal = Personal::create($data);
         DB::commit();
         return $personal;
@@ -67,13 +69,13 @@ class PersonalService
     }
 
     /**
-     * Borrado lógico: marca al trabajador como is_deleted = true en lugar de removerlo de la base de datos.
+     * Borrado lï¿½gico: marca al trabajador como is_deleted = true en lugar de removerlo de la base de datos.
      * Consulta SQL Raw:
      * UPDATE personal SET is_deleted = true WHERE id_personal = $id;
      */
     public static function delete($id)
     {
-        $personal = Personal::find($id);
+        $personal = Personal::where('id_personal', $id)->where('is_deleted', false)->first();
         if (!$personal) {
             return null;
         }

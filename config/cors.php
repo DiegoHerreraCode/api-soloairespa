@@ -19,10 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://api-soloairespa.test',           // Para cuando desarrollas en local
-        // 'https://mi-super-app.vercel.app', // Tu dominio de producción del Front
-    ],
+    'allowed_origins' => ['*'],
 
     'allowed_origins_patterns' => [],
 

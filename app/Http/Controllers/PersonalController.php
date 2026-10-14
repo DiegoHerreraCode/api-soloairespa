@@ -60,8 +60,7 @@ class PersonalController extends Controller
             'rut' => 'required|string|max:100|unique:personal,rut',
             'correo' => 'required|email|max:100|unique:personal,correo',
             'num_tlf' => 'required|string|max:50|unique:personal,num_tlf',
-            'direccion' => 'required|string|max:100',
-            'disponible' => 'nullable|boolean',
+            'direccion' => 'required|string|max:100'
         ]);
 
         $personal = PersonalService::create($request->all());
@@ -115,13 +114,13 @@ class PersonalController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'nombre' => 'string|max:100',
-            'rut' => "string|max:100|unique:personal,rut,{$id},id_personal",
-            'correo' => "email|max:100|unique:personal,correo,{$id},id_personal",
-            'num_tlf' => "string|max:50|unique:personal,num_tlf,{$id},id_personal",
-            'direccion' => 'string|max:100',
-            'disponible' => 'boolean',
-            'is_deleted' => 'boolean',
+            'nombre' => 'nullable|string|max:100',
+            'rut' => "nullable|string|max:100|unique:personal,rut,{$id},id_personal",
+            'correo' => "nullable|email|max:100|unique:personal,correo,{$id},id_personal",
+            'num_tlf' => "nullable|string|max:50|unique:personal,num_tlf,{$id},id_personal",
+            'direccion' => 'nullable|string|max:100',
+            'disponible' => 'nullable|boolean',
+            'is_deleted' => 'nullable|boolean',
         ]);
 
         // Validar que al menos un campo sea modificado

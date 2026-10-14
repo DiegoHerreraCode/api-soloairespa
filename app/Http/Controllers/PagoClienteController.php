@@ -64,7 +64,7 @@ class PagoClienteController extends Controller
             'fecha_pago' => 'nullable|date',
             'metodo_pago' => 'required|in:transferencia,efectivo,cheque',
             'num_referencia' => 'nullable|string|max:50',
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120',
         ]);
 
         $data = $request->all();

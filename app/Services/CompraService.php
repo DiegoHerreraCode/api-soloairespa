@@ -113,10 +113,12 @@ class CompraService
         // Una compra siempre nace con estado "por_pagar"
         $data['estado'] = CompraEstado::POR_PAGAR;
 
+        $data['id_admin'] = auth()->user()->id_admin;
+
         // 2. Crear cabecera de Compra
         $compra = Compra::create($data);
 
-        // 3. Procesar l�neas de compra, serializados e inventario
+        // 3. Procesar lineas de compra, serializados e inventario
         if (!empty($detalles) && is_array($detalles)) {
             foreach ($detalles as $lineaData) {
                 $seriales = $lineaData['seriales'] ?? [];
