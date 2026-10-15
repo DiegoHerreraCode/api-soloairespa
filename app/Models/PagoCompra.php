@@ -34,6 +34,8 @@ class PagoCompra extends ApiModel
         'image',
         'imagePath',
         'estado',
+        'abono_al_bien',
+        'abono_al_iva'
     ];
 
     protected $casts = [

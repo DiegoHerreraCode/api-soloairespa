@@ -63,9 +63,9 @@ class CompraController extends Controller
     {
         $request->validate([
             // Cabecera
-            'id_proveedor' => 'nullable|integer|exists:proveedores,id_proveedor',
-            'num_factura_boleta' => 'nullable|string|max:100',
-            'fecha_compra' => 'nullable|date',
+            'id_proveedor' => 'required|integer|exists:proveedores,id_proveedor',
+            'num_factura_boleta' => 'required|string|max:100',
+            'fecha_compra' => 'required|date',
             'tipo_pago' => 'required|in:contado,credito',
             'estado' => 'nullable|in:por_pagar,pagada_parcial,pagada',
             'monto_total_gravado' => 'nullable|numeric',

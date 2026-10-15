@@ -4,14 +4,15 @@ namespace App\Services;
 
 use App\Models\ReparacionInsumo;
 use App\Models\Inventario;
+use App\Models\Admin;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Service ReparacionInsumoService
  * 
- * Gestiona el consumo, edición y eliminación de insumos cargados a una reparación.
- * Sincroniza en tiempo real las existencias físicas de inventario (descontando o reintegrando stock)
- * y dispara el recálculo consolidado de costos de la reparación.
+ * Gestiona el consumo, ediciï¿½n y eliminaciï¿½n de insumos cargados a una reparaciï¿½n.
+ * Sincroniza en tiempo real las existencias fï¿½sicas de inventario (descontando o reintegrando stock)
+ * y dispara el recï¿½lculo consolidado de costos de la reparaciï¿½n.
  */
 class ReparacionInsumoService
 {
@@ -36,8 +37,8 @@ class ReparacionInsumoService
     }
 
     /**
-     * Registra un nuevo insumo consumido en una reparación a través de ReparacionService,
-     * descontando el stock del inventario y recalculando la reparación.
+     * Registra un nuevo insumo consumido en una reparaciï¿½n a travï¿½s de ReparacionService,
+     * descontando el stock del inventario y recalculando la reparaciï¿½n.
      * Consulta SQL Raw:
      * INSERT INTO reparaciones_insumos (...) VALUES (...);
      */
@@ -45,10 +46,13 @@ class ReparacionInsumoService
     {
         DB::beginTransaction();
 
-        $data['id_admin'] = $data['id_admin'] ?? auth()->id() ?? 1;
+        $userId = auth()->id();
+        $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+        $data['id_admin'] = $admin ? $admin->id_admin : 1;
+
         $insumo = ReparacionService::registrarInsumo($data);
 
-        // Recalcular costos consolidados de la reparación
+        // Recalcular costos consolidados de la reparacin
         ReparacionService::recalcularCostosReparacion($insumo->id_reparacion);
 
         DB::commit();
@@ -83,7 +87,7 @@ class ReparacionInsumoService
 
             if ($item && $diferencia != 0) {
                 $item->update([
-                    'cantidad_total'  => max(0, (int) $item->cantidad_total - $diferencia),
+                    'cantidad_total' => max(0, (int) $item->cantidad_total - $diferencia),
                     'cantidad_propia' => max(0, (int) $item->cantidad_propia - $diferencia),
                 ]);
             }
@@ -99,7 +103,7 @@ class ReparacionInsumoService
 
         $insumo->update($data);
 
-        // Recalcular costos de la reparación
+        // Recalcular costos de la reparaciï¿½n
         ReparacionService::recalcularCostosReparacion($insumo->id_reparacion);
 
         DB::commit();
@@ -128,14 +132,14 @@ class ReparacionInsumoService
         $item = Inventario::find($insumo->id_inventario);
         if ($item) {
             $item->update([
-                'cantidad_total'  => (int) $item->cantidad_total + (int) $insumo->cantidad,
+                'cantidad_total' => (int) $item->cantidad_total + (int) $insumo->cantidad,
                 'cantidad_propia' => (int) $item->cantidad_propia + (int) $insumo->cantidad,
             ]);
         }
 
         $insumo->delete();
 
-        // Recalcular costos consolidados de la reparación
+        // Recalcular costos consolidados de la reparaciï¿½n
         ReparacionService::recalcularCostosReparacion($idReparacion);
 
         DB::commit();

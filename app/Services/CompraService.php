@@ -12,6 +12,7 @@ use App\Enums\CompraEstado;
 use App\Enums\CompraTipoPago;
 use App\Enums\PagoCompraEstado;
 use App\Services\InventarioService;
+use App\Models\Admin;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -113,7 +114,9 @@ class CompraService
         // Una compra siempre nace con estado "por_pagar"
         $data['estado'] = CompraEstado::POR_PAGAR;
 
-        $data['id_admin'] = auth()->user()->id_admin;
+        $userId = auth()->id();
+        $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+        $data['id_admin'] = $admin ? $admin->id_admin : 1;
 
         // 2. Crear cabecera de Compra
         $compra = Compra::create($data);
@@ -258,6 +261,8 @@ class CompraService
                 'porcentaje_monto_total' => $porcentaje,
                 'fecha_pago_acordada' => $pago['fecha_pago_acordada'] ?? now(),
                 'estado' => PagoCompraEstado::PENDIENTE->value,
+                'abono_al_bien' => ((($compra->monto_total_gravado + $compra->monto_total_exento) * $porcentaje)) / 100,
+                'abono_al_iva' => ($compra->monto_total_iva * $porcentaje) / 100,
             ]);
         }
     }

@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Service PagoClienteService
  * 
- * Gestiona los cobros y amortizaciones realizados por los clientes sobre sus órdenes de trabajo:
- * - Valida que en órdenes de reparación sólo se pueda cobrar tras haber finalizado el trabajo operativo.
- * - Registra pagos y descuenta automáticamente el monto pendiente de la orden.
+ * Gestiona los cobros y amortizaciones realizados por los clientes sobre sus ï¿½rdenes de trabajo:
+ * - Valida que en ï¿½rdenes de reparaciï¿½n sï¿½lo se pueda cobrar tras haber finalizado el trabajo operativo.
+ * - Registra pagos y descuenta automï¿½ticamente el monto pendiente de la orden.
  * - Actualiza el estado administrativo a 'pagada' si el saldo pendiente llega a cero.
- * - Soporta anulación de pagos con registro de auditoría (motivo, fecha y administrador).
+ * - Soporta anulaciï¿½n de pagos con registro de auditorï¿½a (motivo, fecha y administrador).
  */
 class PagoClienteService
 {
@@ -55,7 +55,7 @@ class PagoClienteService
 
     /**
      * Registra un pago de cliente:
-     * 1. Verifica que si es reparación, la orden ya esté finalizada operativamente.
+     * 1. Verifica que si es reparaciï¿½n, la orden ya estï¿½ finalizada operativamente.
      * 2. Inserta el pago en la base de datos.
      * 3. Suma los pagos activos y recalcula el saldo pendiente de la orden.
      * 4. Transiciona a 'pagada' si el saldo queda en cero.
@@ -68,7 +68,7 @@ class PagoClienteService
      */
     public static function create($data)
     {
-        // En órdenes de tipo reparación sólo se permite registrar pagos cuando el estado operativo es finalizada
+        // En ï¿½rdenes de tipo reparaciï¿½n sï¿½lo se permite registrar pagos cuando el estado operativo es finalizada
         $ordenCheck = Orden::with('tipoOrden')->find($data['id_orden'] ?? null);
         if ($ordenCheck) {
             $nombreTipo = $ordenCheck->tipoOrden ? strtolower(trim($ordenCheck->tipoOrden->nombre)) : '';
@@ -104,9 +104,9 @@ class PagoClienteService
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
             $orden->update([
-                'monto_pendiente'       => round($nuevoPendiente, 2),
+                'monto_pendiente' => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
-                'last_update'           => now(),
+                'last_update' => now(),
             ]);
         }
 
@@ -131,7 +131,7 @@ class PagoClienteService
         DB::beginTransaction();
         $pago->update($data);
 
-        // Recalcular saldo pendiente de la orden si se modificó el monto
+        // Recalcular saldo pendiente de la orden si se modificï¿½ el monto
         $orden = Orden::find($pago->id_orden);
         if ($orden) {
             // Consulta SQL Raw equivalente:
@@ -142,9 +142,9 @@ class PagoClienteService
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
             $orden->update([
-                'monto_pendiente'       => round($nuevoPendiente, 2),
+                'monto_pendiente' => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
-                'last_update'           => now(),
+                'last_update' => now(),
             ]);
         }
 
@@ -153,7 +153,7 @@ class PagoClienteService
     }
 
     /**
-     * Elimina físicamente un pago y reajusta el saldo de la orden asociada.
+     * Elimina fï¿½sicamente un pago y reajusta el saldo de la orden asociada.
      * Consulta SQL Raw:
      * DELETE FROM pagos_clientes WHERE id_pago_cliente = $id;
      * SELECT SUM(monto) FROM pagos_clientes WHERE id_orden = ... AND estado != 'anulado';
@@ -181,9 +181,9 @@ class PagoClienteService
             $estadoAdmin = ($nuevoPendiente <= 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
             $orden->update([
-                'monto_pendiente'       => round($nuevoPendiente, 2),
+                'monto_pendiente' => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
-                'last_update'           => now(),
+                'last_update' => now(),
             ]);
         }
 
@@ -192,7 +192,7 @@ class PagoClienteService
     }
 
     /**
-     * Anula lógicamente un pago de cliente con auditoría y restituye el saldo pendiente en la orden.
+     * Anula lï¿½gicamente un pago de cliente con auditorï¿½a y restituye el saldo pendiente en la orden.
      *
      * Consulta SQL Raw:
      * UPDATE pagos_clientes SET estado = 'anulado', fecha_anulacion = now(), id_admin_anulacion = ..., motivo_anulacion = ... WHERE id_pago_cliente = $id;
@@ -211,16 +211,18 @@ class PagoClienteService
             return false;
         }
 
+
+
         DB::beginTransaction();
 
         $pago->update([
-            'estado'              => PagoClienteEstado::ANULADO->value,
-            'fecha_anulacion'     => now(),
-            'id_admin_anulacion'  => $data['id_admin_anulacion'] ?? auth()->id() ?? 1,
-            'motivo_anulacion'    => $data['motivo_anulacion'] ?? 'Anulación de pago',
+            'estado' => PagoClienteEstado::ANULADO->value,
+            'fecha_anulacion' => now(),
+            'id_admin_anulacion' => $data['id_admin_anulacion'] ?? 1,
+            'motivo_anulacion' => $data['motivo_anulacion'] ?? 'Anulaciï¿½n de pago',
         ]);
 
-        // Recalcular saldo pendiente de la orden considerando únicamente pagos activos (no anulados)
+        // Recalcular saldo pendiente de la orden considerando ï¿½nicamente pagos activos (no anulados)
         $orden = Orden::find($pago->id_orden);
         if ($orden) {
             $totalPagado = (float) PagoCliente::where('id_orden', $orden->id_orden)
@@ -231,9 +233,9 @@ class PagoClienteService
             $estadoAdmin = ($nuevoPendiente <= 0 && (float) $orden->monto_total > 0) ? OrdenEstadoAdmin::PAGADA : OrdenEstadoAdmin::PENDIENTE_PAGO;
 
             $orden->update([
-                'monto_pendiente'       => round($nuevoPendiente, 2),
+                'monto_pendiente' => round($nuevoPendiente, 2),
                 'estado_administrativo' => $estadoAdmin,
-                'last_update'           => now(),
+                'last_update' => now(),
             ]);
         }
 

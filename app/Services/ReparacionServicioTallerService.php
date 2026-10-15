@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ReparacionServicioTaller;
 use App\Models\Reparacion;
 use App\Models\Orden;
+use App\Models\Admin;
 use App\Enums\OrdenEstadoOperativo;
 use App\Enums\TallerEstado;
 use App\Enums\ReparacionEstado;
@@ -51,7 +52,9 @@ class ReparacionServicioTallerService
     {
         DB::beginTransaction();
 
-        $data['id_admin'] = $data['id_admin'] ?? auth()->id() ?? 1;
+        $userId = auth()->id();
+        $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+        $data['id_admin'] = $admin ? $admin->id_admin : 1;
         if (empty($data['estado'])) {
             $data['estado'] = TallerEstado::PENDIENTE_ASIGNACION->value;
         }
@@ -108,8 +111,8 @@ class ReparacionServicioTallerService
             $reparacion = Reparacion::find($servicio->id_reparacion);
             if ($reparacion && $reparacion->estado === ReparacionEstado::PENDIENTE) {
                 $reparacion->update([
-                    'estado'                => ReparacionEstado::EN_PROCESO->value,
-                    'fecha_inicio'          => $reparacion->fecha_inicio ?? now(),
+                    'estado' => ReparacionEstado::EN_PROCESO->value,
+                    'fecha_inicio' => $reparacion->fecha_inicio ?? now(),
                     'id_admin_fecha_inicio' => $reparacion->id_admin_fecha_inicio ?? auth()->id(),
                 ]);
             }
@@ -120,7 +123,7 @@ class ReparacionServicioTallerService
                 if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
                     $orden->update([
                         'estado_operativo' => OrdenEstadoOperativo::EN_PROCESO->value,
-                        'last_update'      => now(),
+                        'last_update' => now(),
                     ]);
                 }
             }
@@ -213,7 +216,7 @@ class ReparacionServicioTallerService
      * SELECT * FROM reparaciones WHERE id_reparacion = $idReparacion LIMIT 1;
      * UPDATE reparaciones SET estado = 'finalizada', fecha_fin = now() WHERE id_reparacion = $idReparacion;
      */
-        /**
+    /**
      * Verifica si todas las labores de la reparación alcanzaron el estado 'finalizado'.
      * Retorna true si todos los servicios están finalizados (o no tiene servicios pendientes),
      * false si aún quedan tareas en espera, en proceso o pendientes de asignación.

@@ -205,11 +205,11 @@ class PagoClienteController extends Controller
         $data = $request->all();
 
         // Resolver id_admin_anulacion automáticamente desde el token autenticado
-        $userId = auth()->id();
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "admins" WHERE "id_user" = :userId LIMIT 1;
+        $userId = auth()->id();
         $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
-        $data['id_admin_anulacion'] = $admin ? $admin->id_admin : ($data['id_admin_anulacion'] ?? 1);
+        $data['id_admin_anulacion'] = $admin ? $admin->id_admin : 1;
 
         $resultado = PagoClienteService::anular($id, $data);
         if ($resultado === false) {

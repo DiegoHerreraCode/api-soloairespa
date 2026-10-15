@@ -11,6 +11,7 @@ use App\Models\ReparacionInsumo;
 use App\Models\ReparacionServicioTaller;
 use App\Models\Asignacion;
 use App\Models\DetalleOrden;
+use App\Models\Admin;
 use App\Enums\ReparacionEstado;
 use App\Enums\RepuestoEstado;
 use App\Enums\TallerEstado;
@@ -86,7 +87,10 @@ class ReparacionService
         if (!empty($insumos) && is_array($insumos)) {
             foreach ($insumos as $insumoData) {
                 $insumoData['id_reparacion'] = $reparacion->id_reparacion;
-                $insumoData['id_admin'] = $insumoData['id_admin'] ?? auth()->id() ?? 1;
+                $userId = auth()->id();
+                $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+                $insumoData['id_admin'] = $admin ? $admin->id_admin : 1;
+
                 self::registrarInsumo($insumoData);
             }
         }
@@ -95,7 +99,9 @@ class ReparacionService
         if (!empty($servicios) && is_array($servicios)) {
             foreach ($servicios as $servicioData) {
                 $servicioData['id_reparacion'] = $reparacion->id_reparacion;
-                $servicioData['id_admin'] = $servicioData['id_admin'] ?? auth()->id() ?? 1;
+                $userId = auth()->id();
+                $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+                $servicioData['id_admin'] = $admin ? $admin->id_admin : 1;
                 if (empty($servicioData['estado'])) {
                     $servicioData['estado'] = TallerEstado::PENDIENTE_ASIGNACION->value;
                 }
@@ -141,16 +147,18 @@ class ReparacionService
                 $data['fecha_inicio'] = now();
             }
             if (empty($reparacion->id_admin_fecha_inicio) && !isset($data['id_admin_fecha_inicio'])) {
-                $data['id_admin_fecha_inicio'] = auth()->id();
+                $userId = auth()->id();
+                $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+                $data['id_admin_fecha_inicio'] = $admin ? $admin->id_admin : 1;
             }
 
-            // Si la reparaci�n pertenece a una orden, poner autom�ticamente la orden en 'en_proceso'
+            // Si la reparacin pertenece a una orden, poner automticamente la orden en 'en_proceso'
             if (!empty($reparacion->id_orden)) {
                 $orden = Orden::find($reparacion->id_orden);
                 if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
                     $orden->update([
                         'estado_operativo' => OrdenEstadoOperativo::EN_PROCESO->value,
-                        'last_update'      => now(),
+                        'last_update' => now(),
                     ]);
                 }
             }
@@ -162,7 +170,9 @@ class ReparacionService
                 $data['fecha_fin'] = now();
             }
             if (empty($reparacion->id_admin_fecha_fin) && !isset($data['id_admin_fecha_fin'])) {
-                $data['id_admin_fecha_fin'] = auth()->id();
+                $userId = auth()->id();
+                $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+                $data['id_admin_fecha_fin'] = $admin ? $admin->id_admin : 1;
             }
         }
 
@@ -224,7 +234,7 @@ class ReparacionService
             $item = Inventario::find($insumo->id_inventario);
             if ($item) {
                 $item->update([
-                    'cantidad_total'  => (int) $item->cantidad_total + (int) $insumo->cantidad,
+                    'cantidad_total' => (int) $item->cantidad_total + (int) $insumo->cantidad,
                     'cantidad_propia' => (int) $item->cantidad_propia + (int) $insumo->cantidad,
                 ]);
             }
@@ -287,7 +297,9 @@ class ReparacionService
                 ReparacionInsumoService::update($idInsumo, $insumoData);
             } else {
                 $insumoData['id_reparacion'] = $idReparacion;
-                $insumoData['id_admin'] = $insumoData['id_admin'] ?? auth()->id() ?? 1;
+                $userId = auth()->id();
+                $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+                $insumoData['id_admin'] = $admin ? $admin->id_admin : 1;
                 $nuevo = self::registrarInsumo($insumoData);
                 $idsConservados[] = $nuevo->id_reparacion_insumo;
                 $idsInventariosAfectados[] = $nuevo->id_inventario;
@@ -335,7 +347,9 @@ class ReparacionService
                 ReparacionServicioTallerService::update($idServicio, $servicioData);
             } else {
                 $servicioData['id_reparacion'] = $idReparacion;
-                $servicioData['id_admin'] = $servicioData['id_admin'] ?? auth()->id() ?? 1;
+                $userId = auth()->id();
+                $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+                $servicioData['id_admin'] = $admin ? $admin->id_admin : 1;
                 if (empty($servicioData['estado'])) {
                     $servicioData['estado'] = TallerEstado::PENDIENTE_ASIGNACION->value;
                 }
@@ -399,7 +413,7 @@ class ReparacionService
             $nuevoTotal = max(0, (int) $item->cantidad_total - $cantidad);
             $nuevoPropio = max(0, (int) $item->cantidad_propia - $cantidad);
             $item->update([
-                'cantidad_total'  => $nuevoTotal,
+                'cantidad_total' => $nuevoTotal,
                 'cantidad_propia' => $nuevoPropio,
             ]);
         }
@@ -481,13 +495,13 @@ class ReparacionService
         $montoTotalIva = $ivaInsumos + $ivaServicios;
 
         $reparacion->update([
-            'costo_insumos_base'          => round($costoInsumosBase, 2),
-            'costo_insumos_con_ganancia'  => round($costoInsumosConGanancia, 2),
-            'costo_servicios_base'        => round($costoServiciosBase, 2),
-            'costo_servicios_con_ganancia'=> round($costoServiciosConGanancia, 2),
-            'costo_total'                 => round($costoTotal, 2),
-            'costo_total_con_ganancia'    => round($costoTotalConGanancia, 2),
-            'monto_total_iva'             => round($montoTotalIva, 2),
+            'costo_insumos_base' => round($costoInsumosBase, 2),
+            'costo_insumos_con_ganancia' => round($costoInsumosConGanancia, 2),
+            'costo_servicios_base' => round($costoServiciosBase, 2),
+            'costo_servicios_con_ganancia' => round($costoServiciosConGanancia, 2),
+            'costo_total' => round($costoTotal, 2),
+            'costo_total_con_ganancia' => round($costoTotalConGanancia, 2),
+            'monto_total_iva' => round($montoTotalIva, 2),
         ]);
     }
 
@@ -514,10 +528,10 @@ class ReparacionService
             $costoConGanancia = (float) ($reparacion->costo_total_con_ganancia ?? 0.00);
 
             $repuesto->update([
-                'estado'                        => RepuestoEstado::REPARADO->value,
-                'costo_reparacion_base'         => $costoBaseReparacion,
+                'estado' => RepuestoEstado::REPARADO->value,
+                'costo_reparacion_base' => $costoBaseReparacion,
                 'costo_reparacion_con_ganancia' => $costoConGanancia,
-                'costo_total'                   => $costoAdquisicion + $costoBaseReparacion,
+                'costo_total' => $costoAdquisicion + $costoBaseReparacion,
             ]);
 
             // Actualizar inventario con m�tricas completas seg�n la Gu�a de Validaci�n Manual
@@ -571,28 +585,28 @@ class ReparacionService
 
                     // Grabar registro en detalles_ordenes con id_repuesto_saliente
                     DetalleOrden::create([
-                        'id_orden'                        => $orden->id_orden,
-                        'id_inventario_insumo_saliente'   => null,
+                        'id_orden' => $orden->id_orden,
+                        'id_inventario_insumo_saliente' => null,
                         'id_inventario_repuesto_saliente' => $repuestoAsociado ? $repuestoAsociado->id_inventario : null,
-                        'id_repuesto_saliente'            => $repuestoAsociado ? $repuestoAsociado->id_repuesto : null,
+                        'id_repuesto_saliente' => $repuestoAsociado ? $repuestoAsociado->id_repuesto : null,
                         'id_inventario_repuesto_entrante' => null,
-                        'id_repuesto_entrante'            => null,
-                        'cantidad'                        => 1,
-                        'precio_unitario'                 => $subtotalLinea,
-                        'monto_tasacion'                  => 0.00,
-                        'monto_total_linea_sin_iva'       => $subtotalLinea,
-                        'porcentaje_iva'                  => $porcentajeIva,
-                        'monto_iva'                       => $ivaLinea,
-                        'monto_total_linea_con_iva'       => $totalLinea,
+                        'id_repuesto_entrante' => null,
+                        'cantidad' => 1,
+                        'precio_unitario' => $subtotalLinea,
+                        'monto_tasacion' => 0.00,
+                        'monto_total_linea_sin_iva' => $subtotalLinea,
+                        'porcentaje_iva' => $porcentajeIva,
+                        'monto_iva' => $ivaLinea,
+                        'monto_total_linea_con_iva' => $totalLinea,
                     ]);
 
                     // Asignar salida contable y f�sica del repuesto reparado
                     if ($repuestoAsociado) {
                         $costoTotalRep = (float) $repuestoAsociado->costo_total;
                         $repuestoAsociado->update([
-                            'id_orden_salida'  => $orden->id_orden,
+                            'id_orden_salida' => $orden->id_orden,
                             'monto_venta_real' => $subtotalLinea,
-                            'utilidad'         => round($subtotalLinea - $costoTotalRep, 2),
+                            'utilidad' => round($subtotalLinea - $costoTotalRep, 2),
                         ]);
                     }
 
@@ -613,12 +627,12 @@ class ReparacionService
                 // Actualizar montos definitivos consolidados y marcar la orden como finalizada
                 $orden->update([
                     'monto_total_gravado' => round($totalGravado, 2),
-                    'monto_total_exento'  => round($totalExento, 2),
-                    'monto_total_iva'     => round($totalIva, 2),
-                    'monto_total'         => round($totalNeto, 2),
-                    'monto_pendiente'     => round($totalNeto, 2),
-                    'estado_operativo'    => OrdenEstadoOperativo::FINALIZADA->value,
-                    'last_update'         => now(),
+                    'monto_total_exento' => round($totalExento, 2),
+                    'monto_total_iva' => round($totalIva, 2),
+                    'monto_total' => round($totalNeto, 2),
+                    'monto_pendiente' => round($totalNeto, 2),
+                    'estado_operativo' => OrdenEstadoOperativo::FINALIZADA->value,
+                    'last_update' => now(),
                 ]);
             }
         }
