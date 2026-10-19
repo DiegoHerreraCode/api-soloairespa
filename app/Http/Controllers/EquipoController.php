@@ -59,7 +59,6 @@ class EquipoController extends Controller
             'id_inventario' => 'required|integer|exists:inventario,id_inventario',
             'id_detalle_compra' => 'required|integer|exists:detalles_compras,id_detalle_compra',
             'serial' => 'required|string|max:100',
-            'nombre' => 'required|string|max:100',
             'is_deleted' => 'nullable|boolean',
         ]);
 
@@ -118,7 +117,6 @@ class EquipoController extends Controller
             'id_inventario' => 'integer|exists:inventario,id_inventario',
             'id_detalle_compra' => 'integer|exists:detalles_compras,id_detalle_compra',
             'serial' => 'string|max:100',
-            'nombre' => 'string|max:100',
             'is_deleted' => 'boolean',
         ]);
 
@@ -127,7 +125,6 @@ class EquipoController extends Controller
             !$request->has('id_inventario') &&
             !$request->has('id_detalle_compra') &&
             !$request->has('serial') &&
-            !$request->has('nombre') &&
             !$request->has('is_deleted')
         ) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);

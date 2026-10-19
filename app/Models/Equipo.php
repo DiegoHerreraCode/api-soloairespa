@@ -7,7 +7,7 @@ use App\Models\ApiModel;
 /**
  * Modelo Equipo
  * 
- * Representa equipos físicos completos con serial individual adquiridos mediante compras.
+ * Representa equipos fï¿½sicos completos con serial individual adquiridos mediante compras.
  */
 class Equipo extends ApiModel
 {
@@ -21,12 +21,11 @@ class Equipo extends ApiModel
         'id_inventario',
         'id_detalle_compra',
         'serial',
-        'nombre',
         'is_deleted',
     ];
 
     /**
-     * Ítem de inventario maestro que define el tipo y modelo de este equipo.
+     * ï¿½tem de inventario maestro que define el tipo y modelo de este equipo.
      * Consulta SQL Raw:
      * SELECT * FROM inventario WHERE id_inventario = equipos.id_inventario LIMIT 1;
      */
@@ -36,7 +35,7 @@ class Equipo extends ApiModel
     }
 
     /**
-     * Línea de compra por la cual ingresó el equipo.
+     * Lï¿½nea de compra por la cual ingresï¿½ el equipo.
      * Consulta SQL Raw:
      * SELECT * FROM detalles_compras WHERE id_detalle_compra = equipos.id_detalle_compra LIMIT 1;
      */

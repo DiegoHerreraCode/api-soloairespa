@@ -40,7 +40,7 @@ class OrdenService
      */
     public static function getAll()
     {
-        return Orden::get();
+        return Orden::with("detalles")->get();
     }
 
     /**

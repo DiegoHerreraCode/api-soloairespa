@@ -35,7 +35,7 @@ class CompraService
      */
     public static function getAll()
     {
-        return Compra::get();
+        return Compra::get()->load('detalles');
     }
 
     /**
@@ -45,7 +45,8 @@ class CompraService
      */
     public static function getOne($id)
     {
-        return Compra::find($id);
+        //cargar solo la compra y sus detalles desde la tabla detalles_compras
+        return Compra::find($id)->load('detalles');
     }
 
     /**
@@ -291,10 +292,9 @@ class CompraService
             for ($i = 0; $i < $detalle->cantidad; $i++) {
                 $serialData = $seriales[$i] ?? [];
                 Equipo::create([
-                    'id_modelo' => $item->id_modelo,
+                    'id_inventario' => $item->id_inventario,
                     'id_detalle_compra' => $detalle->id_detalle_compra,
                     'serial' => $serialData['serial'] ?? null,
-                    'nombre' => $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1)),
                 ]);
             }
         } elseif (in_array($tipo, ['compresor', 'valvula'])) {

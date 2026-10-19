@@ -57,7 +57,7 @@ class ModeloController extends Controller
         $request->validate([
             'id_marca' => 'required|integer|exists:marcas,id_marca',
             'nombre' => 'required|string|max:100',
-            'descripcion' => 'required|string|max:100',
+            'descripcion' => 'nullable|string|max:1000',
         ]);
 
         $data = $request->all();
@@ -112,9 +112,9 @@ class ModeloController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'id_marca' => 'integer|exists:marcas,id_marca',
-            'nombre' => 'string|max:100',
-            'descripcion' => 'string|max:100',
+            'id_marca' => 'nullable|integer|exists:marcas,id_marca',
+            'nombre' => 'nullable|string|max:100',
+            'descripcion' => 'nullable|string|max:1000',
         ]);
 
         // Validar que al menos un campo sea modificado
