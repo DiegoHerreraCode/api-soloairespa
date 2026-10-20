@@ -179,7 +179,7 @@ class ReparacionController extends Controller
         $request->validate([
             // Cabecera
             'id_repuesto' => 'integer|exists:repuestos,id_repuesto',
-            'id_orden' => 'integer|exists:ordenes,id_orden',
+            'id_orden' => 'nullable|integer|exists:ordenes,id_orden',
             'estado' => 'in:pendiente,en_proceso,finalizada',
             'fecha_inicio' => 'nullable|date',
             'id_admin_fecha_inicio' => 'integer|exists:admins,id_admin',

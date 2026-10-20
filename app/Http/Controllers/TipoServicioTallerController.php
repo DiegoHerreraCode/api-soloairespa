@@ -53,7 +53,7 @@ class TipoServicioTallerController extends Controller
     {
         $request->validate([
             'nombre' => 'required|string|max:100',
-            'descripcion' => 'nullable|string|max:100',
+            'descripcion' => 'nullable|string|max:1000',
         ]);
 
         $data = $request->all();
@@ -110,7 +110,7 @@ class TipoServicioTallerController extends Controller
     {
         $request->validate([
             'nombre' => 'string|max:100',
-            'descripcion' => 'string|max:100',
+            'descripcion' => 'string|max:1000',
         ]);
 
         // Validar que al menos un campo sea modificado

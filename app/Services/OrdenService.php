@@ -511,9 +511,7 @@ class OrdenService
                     'cantidad_cliente' => (int) $item->cantidad_cliente + 1,
                 ]);
 
-                $serviceTagFinal = !empty($itemData['service_tag'])
-                    ? $itemData['service_tag']
-                    : (($itemData['nombre'] ?? ($item->nombre . ' (Cliente)')) . '_' . now()->format('Ymd_His') . '_' . ($k + 1));
+                $serviceTagFinal = ($itemData['service_tag'] ?? ($itemData['nombre'] ?? ($item->nombre . ' (Cliente)'))) . '_' . now()->format('Ymd_His') . '_' . ($k + 1);
 
                 $repuestoCreado = Repuesto::create([
                     'id_inventario' => $item->id_inventario,

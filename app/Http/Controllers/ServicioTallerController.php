@@ -57,7 +57,7 @@ class ServicioTallerController extends Controller
         $request->validate([
             'id_tipo_servicio_taller' => 'required|integer|exists:tipos_servicios_taller,id_tipo_servicio_taller',
             'nombre' => 'required|string|max:100',
-            'descripcion' => 'required|string|max:200',
+            'descripcion' => 'nullable|string|max:1000',
             'costo_base' => 'nullable|numeric',
             'porcentaje_iva' => 'nullable|numeric',
             'porcentaje_ganancia' => 'nullable|numeric',
@@ -115,17 +115,15 @@ class ServicioTallerController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'id_tipo_servicio_taller' => 'integer|exists:tipos_servicios_taller,id_tipo_servicio_taller',
-            'nombre' => 'string|max:100',
-            'descripcion' => 'string|max:200',
-            'costo_base' => 'numeric',
-            'porcentaje_iva' => 'numeric',
-            'porcentaje_ganancia' => 'numeric',
+            'nombre' => 'nullable|string|max:100',
+            'descripcion' => 'nullable|string|max:1000',
+            'costo_base' => 'nullable|numeric',
+            'porcentaje_iva' => 'nullable|numeric',
+            'porcentaje_ganancia' => 'nullable|numeric',
         ]);
 
         // Validar que al menos un campo sea modificado
         if (
-            !$request->has('id_tipo_servicio_taller') &&
             !$request->has('nombre') &&
             !$request->has('descripcion') &&
             !$request->has('costo_base') &&
