@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Services\OrdenService;
-use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,6 +31,7 @@ class OrdenController extends Controller
     public function index(): JsonResponse
     {
         $ordenes = OrdenService::getAll();
+
         return $this->successResponse(
             $ordenes,
             $ordenes->isEmpty() ? 'No se encontraron órdenes' : 'Órdenes obtenidas correctamente'
@@ -60,9 +60,6 @@ class OrdenController extends Controller
      * -- INSERT INTO "reparaciones" (...) VALUES (...);
      * -- Actualización de inventario: UPDATE "inventario" SET ...;
      * -- COMMIT;
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {
@@ -110,7 +107,7 @@ class OrdenController extends Controller
         $data = $request->all();
 
         $orden = OrdenService::create($data);
-        if (!$orden) {
+        if (! $orden) {
             return $this->errorResponse('Orden no creada', 404);
         }
 
@@ -127,13 +124,12 @@ class OrdenController extends Controller
      * Consulta SQL ejecutada internamente vía Eloquent:
      * -- SELECT * FROM "ordenes" WHERE "id_orden" = :id LIMIT 1;
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function show($id): JsonResponse
     {
         $orden = OrdenService::getOne($id);
-        if (!$orden) {
+        if (! $orden) {
             return $this->errorResponse('Orden no encontrada', 404);
         }
 
@@ -152,9 +148,7 @@ class OrdenController extends Controller
      * -- SELECT * FROM "ordenes" WHERE "id_orden" = :id LIMIT 1;
      * -- UPDATE "ordenes" SET "estado_operativo" = '...', "updated_at" = NOW() WHERE "id_orden" = :id;
      *
-     * @param Request $request
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function update(Request $request, $id): JsonResponse
     {
@@ -175,19 +169,19 @@ class OrdenController extends Controller
         ]);
 
         if (
-            !$request->has('id_cliente') &&
-            !$request->has('id_tipo_orden') &&
-            !$request->has('id_admin') &&
-            !$request->has('monto_total_gravado') &&
-            !$request->has('monto_total_exento') &&
-            !$request->has('monto_total_iva') &&
-            !$request->has('monto_total') &&
-            !$request->has('monto_pendiente') &&
-            !$request->has('fecha_entrega_reparacion') &&
-            !$request->has('estado_operativo') &&
-            !$request->has('estado_administrativo') &&
-            !$request->has('id_admin_anulacion') &&
-            !$request->has('motivo_anulacion')
+            ! $request->has('id_cliente') &&
+            ! $request->has('id_tipo_orden') &&
+            ! $request->has('id_admin') &&
+            ! $request->has('monto_total_gravado') &&
+            ! $request->has('monto_total_exento') &&
+            ! $request->has('monto_total_iva') &&
+            ! $request->has('monto_total') &&
+            ! $request->has('monto_pendiente') &&
+            ! $request->has('fecha_entrega_reparacion') &&
+            ! $request->has('estado_operativo') &&
+            ! $request->has('estado_administrativo') &&
+            ! $request->has('id_admin_anulacion') &&
+            ! $request->has('motivo_anulacion')
         ) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);
         }
@@ -195,7 +189,7 @@ class OrdenController extends Controller
         $data = $request->all();
 
         $orden = OrdenService::update($id, $data);
-        if (!$orden) {
+        if (! $orden) {
             return $this->errorResponse('Orden no encontrada', 404);
         }
 
@@ -214,13 +208,12 @@ class OrdenController extends Controller
      * -- SELECT * FROM "ordenes" WHERE "id_orden" = :id LIMIT 1;
      * -- DELETE FROM "ordenes" WHERE "id_orden" = :id;
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function destroy($id): JsonResponse
     {
         $orden = OrdenService::delete($id);
-        if (!$orden) {
+        if (! $orden) {
             return $this->errorResponse('Orden no encontrada o no se pudo eliminar', 404);
         }
 
@@ -248,9 +241,7 @@ class OrdenController extends Controller
      * -- Reversión de inventario: UPDATE "inventario" ...;
      * -- COMMIT;
      *
-     * @param Request $request
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function anular(Request $request, $id): JsonResponse
     {
@@ -258,7 +249,8 @@ class OrdenController extends Controller
             'motivo_anulacion' => 'required|string|max:250',
             'insumos_devueltos' => 'nullable|array',
             'insumos_devueltos.*.id_reparacion_insumo' => 'required_with:insumos_devueltos|integer|exists:reparaciones_insumos,id_reparacion_insumo',
-            'insumos_devueltos.*.cantidad_no_gastada' => 'required_with:insumos_devueltos|integer|min:0',
+            'insumos_devueltos.*.cantidad_sobrante' => 'nullable|integer|min:0',
+            'insumos_devueltos.*.cantidad_no_gastada' => 'nullable|integer|min:0',
         ]);
 
         $data = $request->all();
@@ -269,7 +261,7 @@ class OrdenController extends Controller
             return $this->errorResponse($resultado, 422);
         }
 
-        if (!$resultado) {
+        if (! $resultado) {
             return $this->errorResponse('Orden no encontrada o no se pudo anular', 404);
         }
 

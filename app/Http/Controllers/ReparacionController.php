@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Admin;
+use App\Services\CotizacionService;
 use App\Services\ReparacionService;
 use App\Services\ReparacionServicioTallerService;
-use App\Services\CotizacionService;
-use App\Models\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -34,6 +34,7 @@ class ReparacionController extends Controller
     public function index(): JsonResponse
     {
         $reparaciones = ReparacionService::getAll();
+
         return $this->successResponse(
             $reparaciones,
             $reparaciones->isEmpty() ? 'No se encontraron reparaciones' : 'Reparaciones obtenidas correctamente'
@@ -58,9 +59,6 @@ class ReparacionController extends Controller
      * -- UPDATE "inventario" SET "cantidad_propia" = cantidad_propia - :cant ...;
      * -- INSERT INTO "reparaciones_servicios_taller" (...) VALUES (...);
      * -- COMMIT;
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {
@@ -117,7 +115,7 @@ class ReparacionController extends Controller
         }
 
         $reparacion = ReparacionService::create($data);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return $this->errorResponse('Reparación no creada', 404);
         }
 
@@ -134,13 +132,12 @@ class ReparacionController extends Controller
      * Consulta SQL ejecutada internamente vía Eloquent:
      * -- SELECT * FROM "reparaciones" WHERE "id_reparacion" = :id LIMIT 1;
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function show($id): JsonResponse
     {
         $reparacion = ReparacionService::getOne($id);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return $this->errorResponse('Reparación no encontrada', 404);
         }
 
@@ -160,18 +157,17 @@ class ReparacionController extends Controller
      * -- SELECT * FROM "reparaciones" WHERE "id_reparacion" = :id LIMIT 1;
      * -- UPDATE "reparaciones" SET "estado" = 'finalizada', "fecha_fin" = NOW() ... WHERE "id_reparacion" = :id;
      *
-     * @param Request $request
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function update(Request $request, $id): JsonResponse
     {
         // Normalizar id_inventario_insumo_saliente si vino con nomenclatura de cotización
         if ($request->has('insumos') && is_array($request->input('insumos'))) {
             $insumosNorm = array_map(function ($ins) {
-                if (!isset($ins['id_inventario']) && isset($ins['id_inventario_insumo_saliente'])) {
+                if (! isset($ins['id_inventario']) && isset($ins['id_inventario_insumo_saliente'])) {
                     $ins['id_inventario'] = $ins['id_inventario_insumo_saliente'];
                 }
+
                 return $ins;
             }, $request->input('insumos'));
             $request->merge(['insumos' => $insumosNorm]);
@@ -210,11 +206,15 @@ class ReparacionController extends Controller
             'servicios.*.costo_unitario' => 'nullable|numeric|min:0',
             'servicios.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
             'servicios.*.porcentaje_iva' => 'nullable|numeric|min:0',
-            'servicios.*.estado' => 'nullable|in:pendiente_asignacion,en_espera,en_proceso,finalizado',
+            // Arreglo opcional de insumos devueltos/sobrantes al finalizar reparación
+            'insumos_devueltos' => 'nullable|array',
+            'insumos_devueltos.*.id_reparacion_insumo' => 'required_with:insumos_devueltos|integer|exists:reparaciones_insumos,id_reparacion_insumo',
+            'insumos_devueltos.*.cantidad_sobrante' => 'nullable|integer|min:0',
+            'insumos_devueltos.*.cantidad_no_gastada' => 'nullable|integer|min:0',
         ]);
 
         if (
-            !$request->hasAny([
+            ! $request->hasAny([
                 'id_repuesto',
                 'id_orden',
                 'estado',
@@ -230,7 +230,8 @@ class ReparacionController extends Controller
                 'costo_total_con_ganancia',
                 'monto_total_iva',
                 'insumos',
-                'servicios'
+                'servicios',
+                'insumos_devueltos',
             ])
         ) {
             return $this->errorResponse('Debe proporcionar al menos un campo válido para actualizar', 400);
@@ -241,7 +242,7 @@ class ReparacionController extends Controller
         // 1. Si la petición solicita explícitamente generar una cotización extra/hija (Opción B)
         if ($request->boolean('crear_cotizacion_extra')) {
             $rep = ReparacionService::getOne($id);
-            if (!$rep) {
+            if (! $rep) {
                 return $this->errorResponse('Reparación no encontrada', 404);
             }
             if (empty($rep->id_orden)) {
@@ -263,20 +264,20 @@ class ReparacionController extends Controller
 
         // 2. Validación de reglas operativas para Reparaciones
         $repActual = ReparacionService::getOne($id);
-        if (!$repActual) {
+        if (! $repActual) {
             return $this->errorResponse('Reparación no encontrada', 404);
         }
 
         $serviceTag = $repActual->repuesto ? $repActual->repuesto->service_tag : null;
         $tieneCotizacionExtraPendiente = false;
-        if (!empty($repActual->id_orden) && !empty($serviceTag)) {
+        if (! empty($repActual->id_orden) && ! empty($serviceTag)) {
             $tieneCotizacionExtraPendiente = CotizacionService::tieneCotizacionExtraPendiente($repActual->id_orden, $serviceTag);
         }
 
         // Regla: si el administrador intenta marcar la reparación como 'finalizada':
         if (isset($data['estado']) && $data['estado'] === 'finalizada') {
             // Condición A: Todos los servicios de la reparación deben estar finalizados
-            if (!ReparacionServicioTallerService::estanTodosLosServiciosFinalizados($id)) {
+            if (! ReparacionServicioTallerService::estanTodosLosServiciosFinalizados($id)) {
                 return $this->errorResponse(
                     'No se puede finalizar la reparación porque aún tiene servicios de taller pendientes o en proceso.',
                     422
@@ -302,7 +303,7 @@ class ReparacionController extends Controller
 
         // 3. Ejecutar guardado directo en ReparacionService
         $reparacion = ReparacionService::update($id, $data);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return $this->errorResponse('Reparación no encontrada', 404);
         }
 
@@ -320,13 +321,12 @@ class ReparacionController extends Controller
      * -- SELECT * FROM "reparaciones" WHERE "id_reparacion" = :id LIMIT 1;
      * -- DELETE FROM "reparaciones" WHERE "id_reparacion" = :id;
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function destroy($id): JsonResponse
     {
         $reparacion = ReparacionService::delete($id);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return $this->errorResponse('Reparación no encontrada', 404);
         }
 

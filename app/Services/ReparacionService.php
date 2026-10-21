@@ -2,26 +2,25 @@
 
 namespace App\Services;
 
-use App\Models\Reparacion;
-use App\Models\Repuesto;
-use App\Models\Inventario;
-use App\Models\Orden;
-use App\Models\ServicioTaller;
-use App\Models\ReparacionInsumo;
-use App\Models\ReparacionServicioTaller;
-use App\Models\Asignacion;
-use App\Models\DetalleOrden;
-use App\Models\Admin;
+use App\Enums\OrdenEstadoOperativo;
 use App\Enums\ReparacionEstado;
 use App\Enums\RepuestoEstado;
 use App\Enums\TallerEstado;
-use App\Enums\OrdenEstadoOperativo;
-use App\Services\InventarioService;
+use App\Models\Admin;
+use App\Models\Asignacion;
+use App\Models\DetalleOrden;
+use App\Models\Inventario;
+use App\Models\Orden;
+use App\Models\Reparacion;
+use App\Models\ReparacionInsumo;
+use App\Models\ReparacionServicioTaller;
+use App\Models\Repuesto;
+use App\Models\ServicioTaller;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Service ReparacionService
- * 
+ *
  * Gestiona el ciclo completo de reparaciones de taller sobre piezas f�sicas:
  * - Creaci�n de la orden t�cnica (en estado inicial 'pendiente').
  * - Carga y sincronizaci�n din�mica de insumos y servicios de mano de obra.
@@ -40,11 +39,11 @@ class ReparacionService
      */
     public static function getAll()
     {
-        return Reparacion::get();
+        return Reparacion::with('insumos', 'serviciosTaller')->get();
     }
 
     /**
-     * Obtiene una reparaci�n espec�fica por su ID.
+     * Obtiene una reparacin especfica por su ID.
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones WHERE id_reparacion = $id LIMIT 1;
      */
@@ -136,7 +135,8 @@ class ReparacionService
 
         $insumos = $data['insumos'] ?? null;
         $servicios = $data['servicios'] ?? null;
-        unset($data['insumos'], $data['servicios']);
+        $insumosDevueltos = $data['insumos_devueltos'] ?? null;
+        unset($data['insumos'], $data['servicios'], $data['insumos_devueltos']);
 
         $nuevoEstado = $data['estado'] ?? null;
         $estadoStr = $nuevoEstado instanceof ReparacionEstado ? $nuevoEstado->value : (string) $nuevoEstado;
@@ -174,6 +174,30 @@ class ReparacionService
                 $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
                 $data['id_admin_fecha_fin'] = $admin ? $admin->id_admin : 1;
             }
+
+            // Procesar insumos sobrantes devueltos al inventario si vienen especificados
+            if (!empty($insumosDevueltos) && is_array($insumosDevueltos)) {
+                $mapaDevueltos = collect($insumosDevueltos)->keyBy('id_reparacion_insumo');
+                $insumosRep = ReparacionInsumo::where('id_reparacion', $reparacion->id_reparacion)->get();
+
+                foreach ($insumosRep as $insumo) {
+                    if ($mapaDevueltos->has($insumo->id_reparacion_insumo)) {
+                        $itemDevuelto = $mapaDevueltos[$insumo->id_reparacion_insumo];
+                        $cantSobrante = (int) ($itemDevuelto['cantidad_sobrante'] ?? $itemDevuelto['cantidad_no_gastada'] ?? 0);
+
+                        if ($cantSobrante > 0) {
+                            $itemInsumo = Inventario::find($insumo->id_inventario);
+                            if ($itemInsumo) {
+                                $itemInsumo->update([
+                                    'cantidad_total' => (int) $itemInsumo->cantidad_total + $cantSobrante,
+                                    'cantidad_propia' => (int) $itemInsumo->cantidad_propia + $cantSobrante,
+                                ]);
+                                $insumosAfectadosIds[] = $itemInsumo->id_inventario;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if (!empty($data)) {
@@ -182,7 +206,8 @@ class ReparacionService
 
         // Sincronizaci�n inteligente de Insumos si viene el array
         if (is_array($insumos)) {
-            $insumosAfectadosIds = self::sincronizarInsumos($reparacion->id_reparacion, $insumos);
+            $insumosSincIds = self::sincronizarInsumos($reparacion->id_reparacion, $insumos);
+            $insumosAfectadosIds = array_merge($insumosAfectadosIds, $insumosSincIds);
         }
 
         // Sincronizaci�n inteligente de Servicios si viene el array
@@ -313,6 +338,7 @@ class ReparacionService
                 ReparacionInsumoService::delete($idInsumo);
             }
         }
+
         return array_values(array_unique($idsInventariosAfectados));
     }
 
