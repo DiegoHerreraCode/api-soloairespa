@@ -2,26 +2,27 @@
 
 namespace App\Services;
 
+use App\Enums\CotizacionEstado;
+use App\Enums\CotizacionTipo;
+use App\Enums\OrdenEstadoOperativo;
+use App\Enums\ReparacionEstado;
 use App\Models\Admin;
 use App\Models\Cotizacion;
 use App\Models\CotizacionInventario;
 use App\Models\CotizacionServicioTaller;
-use App\Models\Orden;
-use App\Models\Repuesto;
 use App\Models\Inventario;
+use App\Models\Orden;
 use App\Models\Reparacion;
-use App\Models\ServicioTaller;
+use App\Models\ReparacionInsumo;
+use App\Models\ReparacionServicioTaller;
+use App\Models\Repuesto;
 use App\Models\Secuencia;
-use App\Enums\CotizacionTipo;
-use App\Enums\CotizacionEstado;
-use App\Enums\OrdenEstadoOperativo;
+use App\Models\ServicioTaller;
 use Illuminate\Support\Facades\DB;
-use App\Services\PDFService;
-use App\Services\InventarioService;
 
 /**
  * Service CotizacionService
- * 
+ *
  * Gestiona el ciclo de vida completo de las cotizaciones:
  * - Creación de cotizaciones para Venta, Recambio y Reparación (con nombres de repuestos únicos vía timestamp).
  * - Generación atómica del número correlativo COT-XXXXX usando la tabla secuencias.
@@ -57,7 +58,7 @@ class CotizacionService
             'detallesInventario.inventarioInsumoSaliente',
             'detallesInventario.inventarioRepuestoSaliente',
             'detallesInventario.inventarioRepuestoEntrante',
-            'detallesServiciosTaller.servicioTaller'
+            'detallesServiciosTaller.servicioTaller',
         ])->find($id);
     }
 
@@ -77,15 +78,16 @@ class CotizacionService
     public static function previsualizarSiguienteNumeroCotizacion(): string
     {
         $ultimoId = Secuencia::where('modelo', 'App\Models\Cotizacion')->value('ultimo_id') ?? 0;
-        return 'COT-' . str_pad((int) $ultimoId + 1, 5, '0', STR_PAD_LEFT);
+
+        return 'COT-'.str_pad((int) $ultimoId + 1, 5, '0', STR_PAD_LEFT);
     }
 
     /**
      * Registra una cotización en el sistema.
-     * 
+     *
      * Si es de tipo Reparación, formatea cada nombre de repuesto ingresado por el usuario
      * agregándole un timestamp para garantizar su unicidad: ej: Compresor_20261006_080215
-     * 
+     *
      * Consulta SQL Raw:
      * INSERT INTO cotizaciones (...) VALUES (...);
      * INSERT INTO cotizaciones_inventario (...) VALUES (...);
@@ -113,7 +115,7 @@ class CotizacionService
         // - Si es cotización INICIAL: genera nombres únicos agregando timestamp.
         // - Si es cotización EXTRA (o el repuesto ya tiene su service_tag definitivo): conserva el tag exacto.
         $mapaNombres = []; // Mapa [nombre_original => nombre_con_timestamp]
-        if (!empty($data['services_tags_repuestos_a_reparar'])) {
+        if (! empty($data['services_tags_repuestos_a_reparar'])) {
             $esTipoExtra = ($data['tipo'] ?? null) === CotizacionTipo::EXTRA->value || ($data['tipo'] ?? null) === CotizacionTipo::EXTRA;
             $tagsOriginales = $data['services_tags_repuestos_a_reparar'];
 
@@ -130,7 +132,7 @@ class CotizacionService
                 $idx = 1;
                 foreach ($tagsOriginales as $nomOriginal) {
                     $nomLimpio = trim((string) $nomOriginal);
-                    $nomConTimestamp = $nomLimpio . '_' . $timestamp . ($idx > 1 ? "_{$idx}" : '');
+                    $nomConTimestamp = $nomLimpio.'_'.$timestamp.($idx > 1 ? "_{$idx}" : '');
                     $nombresUnicos[] = $nomConTimestamp;
                     $mapaNombres[$nomLimpio] = $nomConTimestamp;
                     $idx++;
@@ -251,7 +253,7 @@ class CotizacionService
 
     /**
      * Crea una cotización hija/extra a partir de la modificación de una reparación activa en taller.
-     * 
+     *
      * Regla:
      * - Si la orden padre nació de una cotización: asigna num_cotizacion_padre = num_cotizacion original.
      * - Si la orden padre nació sin cotización previa: num_cotizacion_padre = null.
@@ -259,22 +261,22 @@ class CotizacionService
     public static function crearCotizacionExtraDesdeReparacion(int $idOrden, int $idRepuesto, array $payloadModificacion)
     {
         $orden = Orden::find($idOrden);
-        if (!$orden) {
+        if (! $orden) {
             return 'Orden no encontrada';
         }
 
         $repuesto = Repuesto::find($idRepuesto);
-        if (!$repuesto) {
+        if (! $repuesto) {
             return 'Repuesto no encontrado';
         }
 
         // 1. Verificar si ya existe una cotización extra pendiente para este repuesto en específico
         // Consulta SQL Raw equivalente:
         // SELECT EXISTS (
-        //     SELECT 1 FROM cotizaciones 
-        //     WHERE id_orden = :idOrden 
-        //       AND tipo = 'extra' 
-        //       AND estado = 'pendiente' 
+        //     SELECT 1 FROM cotizaciones
+        //     WHERE id_orden = :idOrden
+        //       AND tipo = 'extra'
+        //       AND estado = 'pendiente'
         //       AND :serviceTag = ANY(services_tags_repuestos_a_reparar)
         // );
         if (self::tieneCotizacionExtraPendiente($idOrden, $repuesto->service_tag)) {
@@ -337,35 +339,31 @@ class CotizacionService
     /**
      * Verifica si una orden tiene alguna cotización extra pendiente de contestación por el cliente.
      * Si se proporciona $serviceTag, verifica si existe una cotización extra pendiente para dicho repuesto.
-     * 
+     *
      * Consulta SQL Raw equivalente (con service_tag):
      * SELECT EXISTS (
-     *     SELECT 1 FROM "cotizaciones" 
-     *     WHERE "id_orden" = :idOrden 
-     *       AND "tipo" = 'extra' 
-     *       AND "estado" = 'pendiente' 
+     *     SELECT 1 FROM "cotizaciones"
+     *     WHERE "id_orden" = :idOrden
+     *       AND "tipo" = 'extra'
+     *       AND "estado" = 'pendiente'
      *       AND :serviceTag = ANY("services_tags_repuestos_a_reparar")
      * );
      *
      * Consulta SQL Raw equivalente (sin service_tag):
      * SELECT EXISTS (
-     *     SELECT 1 FROM "cotizaciones" 
-     *     WHERE "id_orden" = :idOrden 
-     *       AND "tipo" = 'extra' 
+     *     SELECT 1 FROM "cotizaciones"
+     *     WHERE "id_orden" = :idOrden
+     *       AND "tipo" = 'extra'
      *       AND "estado" = 'pendiente'
      * );
-     *
-     * @param int $idOrden
-     * @param string|null $serviceTag
-     * @return bool
      */
     public static function tieneCotizacionExtraPendiente(int $idOrden, ?string $serviceTag = null): bool
     {
         // Consulta SQL Raw equivalente:
         // SELECT EXISTS (
-        //     SELECT 1 FROM "cotizaciones" 
-        //     WHERE "id_orden" = :idOrden 
-        //       AND "tipo" = 'extra' 
+        //     SELECT 1 FROM "cotizaciones"
+        //     WHERE "id_orden" = :idOrden
+        //       AND "tipo" = 'extra'
         //       AND "estado" = 'pendiente'
         //       AND (:serviceTag IS NULL OR :serviceTag = ANY("services_tags_repuestos_a_reparar"))
         // );
@@ -373,7 +371,7 @@ class CotizacionService
             ->where('tipo', CotizacionTipo::EXTRA->value)
             ->where('estado', CotizacionEstado::PENDIENTE->value);
 
-        if (!empty($serviceTag)) {
+        if (! empty($serviceTag)) {
             $query->whereRaw('? = ANY(services_tags_repuestos_a_reparar)', [$serviceTag]);
         }
 
@@ -388,7 +386,7 @@ class CotizacionService
     public static function aceptar(int $idCotizacion, array $data = [])
     {
         $cotizacion = Cotizacion::with(['detallesInventario', 'detallesServiciosTaller', 'tipoOrden'])->find($idCotizacion);
-        if (!$cotizacion) {
+        if (! $cotizacion) {
             return 'Cotización no encontrada';
         }
 
@@ -405,6 +403,7 @@ class CotizacionService
             $resultado = self::aplicarCotizacionExtraSobreReparacion($cotizacion, $data);
             if (is_string($resultado)) {
                 DB::rollBack();
+
                 return $resultado;
             }
 
@@ -422,7 +421,7 @@ class CotizacionService
                 ->values()
                 ->all();
 
-            if (!empty($idsInventarioAfectados)) {
+            if (! empty($idsInventarioAfectados)) {
                 InventarioService::verificarYNotificarStockBajo($idsInventarioAfectados);
             }
 
@@ -443,11 +442,13 @@ class CotizacionService
             $ordenCreada = self::generarOrdenReparacionDesdeCotizacion($cotizacion, $data);
         } else {
             DB::rollBack();
+
             return 'Tipo de orden no soportado para cotización';
         }
 
         if (is_string($ordenCreada)) {
             DB::rollBack();
+
             return $ordenCreada;
         }
 
@@ -467,7 +468,7 @@ class CotizacionService
             ->values()
             ->all();
 
-        if (!empty($idsInventarioAfectados)) {
+        if (! empty($idsInventarioAfectados)) {
             InventarioService::verificarYNotificarStockBajo($idsInventarioAfectados);
         }
 
@@ -486,15 +487,15 @@ class CotizacionService
 
         // Buscar el repuesto en la orden
         // Consulta SQL Raw equivalente:
-        // SELECT * FROM "repuestos" 
-        // WHERE "id_orden_entrada" = :id_orden 
-        //   AND "service_tag" = :nombreRep 
+        // SELECT * FROM "repuestos"
+        // WHERE "id_orden_entrada" = :id_orden
+        //   AND "service_tag" = :nombreRep
         // LIMIT 1;
         $repuesto = Repuesto::where('id_orden_entrada', $cotizacion->id_orden)
-            ->when($nombreRep, fn($q) => $q->where('service_tag', $nombreRep))
+            ->when($nombreRep, fn ($q) => $q->where('service_tag', $nombreRep))
             ->first();
 
-        if (!$repuesto) {
+        if (! $repuesto) {
             return 'No se encontró el repuesto asociado a esta cotización en la orden';
         }
 
@@ -502,14 +503,14 @@ class CotizacionService
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "reparaciones" WHERE "id_repuesto" = :id_repuesto LIMIT 1;
         $reparacion = Reparacion::where('id_repuesto', $repuesto->id_repuesto)->first();
-        if (!$reparacion) {
+        if (! $reparacion) {
             return 'No se encontró la ficha de reparación para este repuesto';
         }
 
         // La cotización EXTRA es estrictamente acumulativa (solo agrega nuevos o incrementa existentes).
         // 1. Procesar insumos cotizados extra:
         foreach ($cotizacion->detallesInventario as $detInv) {
-            $insumoExistente = \App\Models\ReparacionInsumo::where('id_reparacion', $reparacion->id_reparacion)
+            $insumoExistente = ReparacionInsumo::where('id_reparacion', $reparacion->id_reparacion)
                 ->where('id_inventario', $detInv->id_inventario_insumo_saliente)
                 ->first();
 
@@ -536,7 +537,7 @@ class CotizacionService
 
         // 2. Procesar servicios cotizados extra:
         foreach ($cotizacion->detallesServiciosTaller as $detServ) {
-            $servicioExistente = \App\Models\ReparacionServicioTaller::where('id_reparacion', $reparacion->id_reparacion)
+            $servicioExistente = ReparacionServicioTaller::where('id_reparacion', $reparacion->id_reparacion)
                 ->where('id_servicio_taller', $detServ->id_servicio_taller)
                 ->first();
 
@@ -570,24 +571,40 @@ class CotizacionService
 
     /**
      * Convierte una cotización de Venta en una Orden de Venta.
-     * Es un ensamblador / puente: toma los precios, cantidades y productos ya fijados en la cotización, 
-     * le pega los números de serie físicos que tú le indicas en el payload, 
+     * Es un ensamblador / puente: toma los precios, cantidades y productos ya fijados en la cotización,
+     * le pega los números de serie físicos que tú le indicas en el payload,
      * y le pasa todo listo a OrdenService para que descuente bodega y cree la venta oficial.
      */
     protected static function generarOrdenVentaDesdeCotizacion(Cotizacion $cotizacion, array $data)
     {
         // $data['detalles'] debe contener el mapeo de los id_repuesto_saliente serializados
         $detallesPayload = [];
-        $mapeosSeriales = $data['detalles'] ?? [];
+        $mapeosSeriales = array_values($data['detalles'] ?? []);
+        $idxSerial = 0;
 
-        foreach ($cotizacion->detallesInventario as $idx => $det) {
-            $mapeo = $mapeosSeriales[$idx] ?? [];
+        foreach ($cotizacion->detallesInventario as $det) {
+            $repuestosSalientesLinea = [];
+            $cantRequerida = (int) ($det->cantidad ?? 1);
+
+            // Si la línea es un repuesto (serializable), consumimos tantos seriales del payload como cantidad tenga la línea
+            if (! empty($det->id_inventario_repuesto_saliente)) {
+                for ($k = 0; $k < $cantRequerida; $k++) {
+                    $serialObj = $mapeosSeriales[$idxSerial] ?? null;
+                    if ($serialObj && ! empty($serialObj['id_repuesto_saliente'])) {
+                        $repuestosSalientesLinea[] = [
+                            'id_repuesto' => (int) $serialObj['id_repuesto_saliente'],
+                            'precio_unitario' => $det->precio_unitario,
+                        ];
+                    }
+                    $idxSerial++;
+                }
+            }
 
             $detallesPayload[] = [
                 'id_inventario_insumo_saliente' => $det->id_inventario_insumo_saliente,
                 'id_inventario_repuesto_saliente' => $det->id_inventario_repuesto_saliente,
-                'id_repuesto_saliente' => $mapeo['id_repuesto_saliente'] ?? null,
-                'repuestos_salientes' => $mapeo['repuestos_salientes'] ?? null,
+                'id_repuesto_saliente' => count($repuestosSalientesLinea) === 1 ? $repuestosSalientesLinea[0]['id_repuesto'] : null,
+                'repuestos_salientes' => ! empty($repuestosSalientesLinea) ? $repuestosSalientesLinea : null,
                 'cantidad' => $det->cantidad,
                 'precio_unitario' => $det->precio_unitario,
                 'porcentaje_iva' => $det->porcentaje_iva,
@@ -627,7 +644,7 @@ class CotizacionService
                 'id_repuesto_saliente' => $mapeo['id_repuesto_saliente'] ?? null,
                 'precio_unitario' => $det->precio_unitario,
                 'id_inventario_repuesto_entrante' => $det->id_inventario_repuesto_entrante,
-                'serial_entrante' => $mapeo['serial_entrante'] ?? 'SN-REC-' . uniqid(),
+                'serial_entrante' => $mapeo['serial_entrante'] ?? 'SN-REC-'.uniqid(),
                 'service_tag_entrante' => $mapeo['service_tag_entrante'] ?? $mapeo['nombre_entrante'] ?? 'Repuesto Recambio Entrante',
                 'monto_tasacion' => (float) ($mapeo['monto_tasacion'] ?? $det->monto_tasacion ?? 0.00),
                 'porcentaje_iva' => $det->porcentaje_iva,
@@ -668,26 +685,41 @@ class CotizacionService
         ];
 
         $orden = OrdenService::create($ordenData);
-        if (!$orden || is_string($orden)) {
+        if (! $orden || is_string($orden)) {
             return $orden;
         }
 
         // Ahora asociar los insumos y servicios cotizados a cada reparación creada
-        foreach ($cotizacion->services_tags_repuestos_a_reparar ?? [] as $nomRep) {
-            // Buscar el repuesto creado en la orden
-            $repuesto = Repuesto::where('id_orden_entrada', $orden->id_orden)
-                ->where('service_tag', $nomRep)
-                ->first();
+        $tagsCotizados = array_values($cotizacion->services_tags_repuestos_a_reparar ?? []);
+        $repuestosCreados = Repuesto::where('id_orden_entrada', $orden->id_orden)->orderBy('id_repuesto')->get();
 
-            if (!$repuesto) {
+        foreach ($tagsCotizados as $idx => $nomRep) {
+            // 1. Intentar buscar por service_tag exacto o por prefijo original
+            $repuesto = $repuestosCreados->first(function ($r) use ($nomRep) {
+                return $r->service_tag === $nomRep
+                    || str_starts_with($r->service_tag, $nomRep.'_')
+                    || str_starts_with($nomRep, $r->service_tag.'_');
+            });
+
+            // 2. Fallback: emparejar por índice secuencial del repuesto entrante en la orden
+            if (! $repuesto && isset($repuestosCreados[$idx])) {
+                $repuesto = $repuestosCreados[$idx];
+            }
+
+            if (! $repuesto) {
                 continue;
+            }
+
+            // Asegurar que el repuesto conserve el service_tag con el que se cotizó para mantener la trazabilidad
+            if ($repuesto->service_tag !== $nomRep) {
+                $repuesto->update(['service_tag' => $nomRep]);
             }
 
             $reparacion = Reparacion::firstOrCreate(
                 ['id_repuesto' => $repuesto->id_repuesto],
                 [
                     'id_orden' => $orden->id_orden,
-                    'estado' => \App\Enums\ReparacionEstado::PENDIENTE->value,
+                    'estado' => ReparacionEstado::PENDIENTE->value,
                     'fecha_inicio' => null,
                     'id_admin_fecha_inicio' => null,
                     'fecha_fin' => null,
@@ -732,7 +764,7 @@ class CotizacionService
     public static function rechazar(int $idCotizacion)
     {
         $cotizacion = Cotizacion::find($idCotizacion);
-        if (!$cotizacion) {
+        if (! $cotizacion) {
             return 'Cotización no encontrada';
         }
 
@@ -753,7 +785,7 @@ class CotizacionService
     public static function anular(int $idCotizacion, array $data)
     {
         $cotizacion = Cotizacion::find($idCotizacion);
-        if (!$cotizacion) {
+        if (! $cotizacion) {
             return 'Cotización no encontrada';
         }
 
@@ -777,7 +809,7 @@ class CotizacionService
     public static function delete(int $id)
     {
         $cotizacion = Cotizacion::find($id);
-        if (!$cotizacion) {
+        if (! $cotizacion) {
             return null;
         }
 
