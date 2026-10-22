@@ -49,7 +49,7 @@ class OrdenService
      */
     public static function getOne($id)
     {
-        return Orden::find($id);
+        return Orden::with('detalles')->find($id);
     }
 
     /**
@@ -82,17 +82,17 @@ class OrdenService
 
         $data['estado_administrativo'] = $data['estado_administrativo'] ?? OrdenEstadoAdmin::PENDIENTE_PAGO->value;
 
-        if (! empty($data['fecha_creacion'])) {
+        if (!empty($data['fecha_creacion'])) {
             $data['fecha_creacion'] = strlen($data['fecha_creacion']) === 10
-                ? $data['fecha_creacion'].' '.now()->format('H:i:s')
+                ? $data['fecha_creacion'] . ' ' . now()->format('H:i:s')
                 : $data['fecha_creacion'];
         } else {
             $data['fecha_creacion'] = now();
         }
 
-        if (! empty($data['fecha_entrega_reparacion'])) {
+        if (!empty($data['fecha_entrega_reparacion'])) {
             $data['fecha_entrega_reparacion'] = strlen($data['fecha_entrega_reparacion']) === 10
-                ? $data['fecha_entrega_reparacion'].' '.now()->format('H:i:s')
+                ? $data['fecha_entrega_reparacion'] . ' ' . now()->format('H:i:s')
                 : $data['fecha_entrega_reparacion'];
         }
         $data['last_update'] = now();
@@ -120,7 +120,7 @@ class OrdenService
 
         DB::commit();
 
-        if (! empty($inventariosAfectadosIds)) {
+        if (!empty($inventariosAfectadosIds)) {
             InventarioService::verificarYNotificarStockBajo($inventariosAfectadosIds);
         }
 
@@ -135,7 +135,7 @@ class OrdenService
     public static function update($id, $data)
     {
         $orden = Orden::find($id);
-        if (! $orden) {
+        if (!$orden) {
             return null;
         }
 
@@ -148,9 +148,9 @@ class OrdenService
             $data['fecha_anulacion'] = now();
         }
 
-        if (! empty($data['fecha_entrega_reparacion'])) {
+        if (!empty($data['fecha_entrega_reparacion'])) {
             $data['fecha_entrega_reparacion'] = strlen($data['fecha_entrega_reparacion']) === 10
-                ? $data['fecha_entrega_reparacion'].' '.now()->format('H:i:s')
+                ? $data['fecha_entrega_reparacion'] . ' ' . now()->format('H:i:s')
                 : $data['fecha_entrega_reparacion'];
         }
 
@@ -170,7 +170,7 @@ class OrdenService
     public static function delete($id)
     {
         $orden = Orden::find($id);
-        if (! $orden) {
+        if (!$orden) {
             return null;
         }
 
@@ -205,7 +205,7 @@ class OrdenService
 
         foreach ($detalles as $linea) {
             // CASO A: INSUMOS (no serializados)
-            if (! empty($linea['id_inventario_insumo_saliente'])) {
+            if (!empty($linea['id_inventario_insumo_saliente'])) {
                 $item = Inventario::find($linea['id_inventario_insumo_saliente']);
                 $cantidad = (int) ($linea['cantidad'] ?? 1);
                 $precioUnitario = (float) ($linea['precio_unitario'] ?? ($item ? $item->monto_venta_unitario : 0.00));
@@ -247,14 +247,14 @@ class OrdenService
             }
 
             // CASO B: REPUESTOS SERIALIZADOS (compresor o v�lvula)
-            if (! empty($linea['id_inventario_repuesto_saliente'])) {
+            if (!empty($linea['id_inventario_repuesto_saliente'])) {
                 $item = Inventario::find($linea['id_inventario_repuesto_saliente']);
                 $porcentajeIva = (float) ($linea['porcentaje_iva'] ?? ($item ? $item->porcentaje_iva : 19.00));
                 $precioSugerido = (float) ($linea['precio_unitario'] ?? ($item ? $item->monto_venta_unitario : 0.00));
 
                 $listaRepuestosSalientes = [];
 
-                if (! empty($linea['repuestos_salientes']) && is_array($linea['repuestos_salientes'])) {
+                if (!empty($linea['repuestos_salientes']) && is_array($linea['repuestos_salientes'])) {
                     foreach ($linea['repuestos_salientes'] as $rs) {
                         if (is_array($rs)) {
                             $listaRepuestosSalientes[] = [
@@ -268,7 +268,7 @@ class OrdenService
                             ];
                         }
                     }
-                } elseif (! empty($linea['id_repuesto_saliente'])) {
+                } elseif (!empty($linea['id_repuesto_saliente'])) {
                     $listaRepuestosSalientes[] = [
                         'id_repuesto' => (int) $linea['id_repuesto_saliente'],
                         'precio_unitario' => $precioSugerido,
@@ -392,7 +392,7 @@ class OrdenService
 
             // 1. REPUESTO SALIENTE: identificar, descontar stock propio y actualizar m�tricas
             $idRepuestoSaliente = $linea['id_repuesto_saliente'] ?? null;
-            if (! $idRepuestoSaliente && ! empty($linea['id_inventario_repuesto_saliente'])) {
+            if (!$idRepuestoSaliente && !empty($linea['id_inventario_repuesto_saliente'])) {
                 // Consulta SQL Raw equivalente:
                 // SELECT * FROM "repuestos"
                 // WHERE "id_inventario" = :id_inventario
@@ -426,7 +426,7 @@ class OrdenService
                 $repEntrante = Repuesto::create([
                     'id_inventario' => $itemEntrante->id_inventario,
                     'serial' => $linea['serial_entrante'] ?? null,
-                    'service_tag' => ($linea['service_tag_entrante'] ?? $linea['nombre_entrante'] ?? ($itemEntrante->nombre.' (Recambio)')).'_'.now()->format('Ymd_His'),
+                    'service_tag' => ($linea['service_tag_entrante'] ?? $linea['nombre_entrante'] ?? ($itemEntrante->nombre . ' (Recambio)')) . '_' . now()->format('Ymd_His'),
                     'estado' => RepuestoEstado::PENDIENTE_REPARACION->value,
                     'propietario' => true,
                     'costo_adquisicion' => $montoTasacion,
@@ -510,7 +510,7 @@ class OrdenService
                     'cantidad_cliente' => (int) $item->cantidad_cliente + 1,
                 ]);
 
-                $serviceTagFinal = ($itemData['service_tag'] ?? ($itemData['nombre'] ?? ($item->nombre.' (Cliente)'))).'_'.now()->format('Ymd_His').'_'.($k + 1);
+                $serviceTagFinal = ($itemData['service_tag'] ?? ($itemData['nombre'] ?? ($item->nombre . ' (Cliente)'))) . '_' . now()->format('Ymd_His') . '_' . ($k + 1);
 
                 $repuestoCreado = Repuesto::create([
                     'id_inventario' => $item->id_inventario,
@@ -557,7 +557,7 @@ class OrdenService
     public static function anular($id, array $data)
     {
         $orden = Orden::find($id);
-        if (! $orden) {
+        if (!$orden) {
             return null;
         }
 
@@ -601,7 +601,7 @@ class OrdenService
 
             foreach ($detalles as $det) {
                 // A. Insumos vendidos: devolver stock propio al inventario
-                if (! empty($det->id_inventario_insumo_saliente)) {
+                if (!empty($det->id_inventario_insumo_saliente)) {
                     $item = Inventario::find($det->id_inventario_insumo_saliente);
                     if ($item) {
                         $item->update([
@@ -613,7 +613,7 @@ class OrdenService
                 }
 
                 // B. Repuestos propios vendidos: reintegrar al taller disponibles
-                if (! empty($det->id_repuesto_saliente)) {
+                if (!empty($det->id_repuesto_saliente)) {
                     $repuesto = Repuesto::find($det->id_repuesto_saliente);
                     if ($repuesto) {
                         $repuesto->update([
@@ -639,7 +639,7 @@ class OrdenService
 
             foreach ($detalles as $det) {
                 // A. Repuesto propio que sali�: vuelve al taller disponible
-                if (! empty($det->id_repuesto_saliente)) {
+                if (!empty($det->id_repuesto_saliente)) {
                     $repSaliente = Repuesto::find($det->id_repuesto_saliente);
                     if ($repSaliente) {
                         $repSaliente->update([
@@ -659,7 +659,7 @@ class OrdenService
                 }
 
                 // B. Repuesto entrante del cliente: se mantiene en repuestos con id_orden_salida = orden.id_orden y se descuenta del inventario del taller
-                if (! empty($det->id_repuesto_entrante)) {
+                if (!empty($det->id_repuesto_entrante)) {
                     $repEntrante = Repuesto::find($det->id_repuesto_entrante);
                     if ($repEntrante) {
                         $repEntrante->update([
@@ -767,7 +767,7 @@ class OrdenService
         DB::commit();
 
         // 5. NOTIFICAR STOCK BAJO SI ALGÚN ÍTEM QUEDÓ POR DEBAJO DE SU MÍNIMO
-        if (! empty($inventariosAfectados)) {
+        if (!empty($inventariosAfectados)) {
             InventarioService::verificarYNotificarStockBajo(array_keys($inventariosAfectados));
         }
 
