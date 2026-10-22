@@ -39,7 +39,7 @@ class ReparacionService
      */
     public static function getAll()
     {
-        return Reparacion::with('insumos', 'serviciosTaller')->get();
+        return Reparacion::with('insumos', 'serviciosTaller', 'repuesto')->get();
     }
 
     /**
