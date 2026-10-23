@@ -2,19 +2,21 @@
 
 namespace App\Models;
 
-use App\Enums\CotizacionTipo;
 use App\Enums\CotizacionEstado;
+use App\Enums\CotizacionTipo;
 
 /**
  * Modelo Cotizacion
- * 
+ *
  * Representa la cabecera de una cotización comercial para Venta, Recambio o Reparación.
  * Maneja jerarquías padre/hija (tipo 'extra') y referencias a repuestos de cliente a reparar.
  */
 class Cotizacion extends ApiModel
 {
     protected $table = 'cotizaciones';
+
     protected $primaryKey = 'id_cotizacion';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -48,9 +50,9 @@ class Cotizacion extends ApiModel
         'monto_total_exento' => 'float',
         'monto_total_iva' => 'float',
         'monto_total' => 'float',
-        'fecha_creacion' => 'datetime',
-        'fecha_vencimiento' => 'datetime',
-        'fecha_anulacion' => 'datetime',
+        'fecha_creacion' => 'date:Y-m-d',
+        'fecha_vencimiento' => 'date:Y-m-d',
+        'fecha_anulacion' => 'date:Y-m-d',
         'num_repuestos_a_reparar' => 'integer',
     ];
 
@@ -72,9 +74,11 @@ class Cotizacion extends ApiModel
             if (empty($inner)) {
                 return [];
             }
+
             return str_getcsv($inner, ',', '"');
         }
         $decoded = json_decode($value, true);
+
         return is_array($decoded) ? $decoded : [];
     }
 
@@ -83,11 +87,12 @@ class Cotizacion extends ApiModel
         if (is_array($value)) {
             // Convierte el array PHP al formato nativo PostgreSQL: {"elem1","elem2"}
             $escaped = array_map(function ($item) {
-                $itemStr = str_replace(chr(92), chr(92) . chr(92), (string) $item);
-                $itemStr = str_replace(chr(34), chr(92) . chr(34), $itemStr);
-                return chr(34) . $itemStr . chr(34);
+                $itemStr = str_replace(chr(92), chr(92).chr(92), (string) $item);
+                $itemStr = str_replace(chr(34), chr(92).chr(34), $itemStr);
+
+                return chr(34).$itemStr.chr(34);
             }, $value);
-            $this->attributes['services_tags_repuestos_a_reparar'] = '{' . implode(',', $escaped) . '}';
+            $this->attributes['services_tags_repuestos_a_reparar'] = '{'.implode(',', $escaped).'}';
         } else {
             $this->attributes['services_tags_repuestos_a_reparar'] = $value;
         }
@@ -102,7 +107,7 @@ class Cotizacion extends ApiModel
     {
         static::creating(function ($cotizacion) {
             if (empty($cotizacion->num_cotizacion)) {
-                $cotizacion->num_cotizacion = 'COT-' . str_pad($cotizacion->id_cotizacion, 5, '0', STR_PAD_LEFT);
+                $cotizacion->num_cotizacion = 'COT-'.str_pad($cotizacion->id_cotizacion, 5, '0', STR_PAD_LEFT);
             }
         });
     }

@@ -2,16 +2,16 @@
 
 namespace App\Services;
 
-use App\Models\PagoCliente;
-use App\Models\Orden;
-use App\Services\OrdenService;
 use App\Enums\OrdenEstadoAdmin;
+use App\Enums\OrdenEstadoOperativo;
 use App\Enums\PagoClienteEstado;
+use App\Models\Orden;
+use App\Models\PagoCliente;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Service PagoClienteService
- * 
+ *
  * Gestiona los cobros y amortizaciones realizados por los clientes sobre sus �rdenes de trabajo:
  * - Valida que en �rdenes de reparaci�n s�lo se pueda cobrar tras haber finalizado el trabajo operativo.
  * - Registra pagos y descuenta autom�ticamente el monto pendiente de la orden.
@@ -72,7 +72,7 @@ class PagoClienteService
         $ordenCheck = Orden::with('tipoOrden')->find($data['id_orden'] ?? null);
         if ($ordenCheck) {
             $nombreTipo = $ordenCheck->tipoOrden ? strtolower(trim($ordenCheck->tipoOrden->nombre)) : '';
-            $estadoOperativo = $ordenCheck->estado_operativo instanceof \App\Enums\OrdenEstadoOperativo
+            $estadoOperativo = $ordenCheck->estado_operativo instanceof OrdenEstadoOperativo
                 ? $ordenCheck->estado_operativo->value
                 : (string) $ordenCheck->estado_operativo;
 
@@ -83,12 +83,8 @@ class PagoClienteService
 
         DB::beginTransaction();
 
-        if (!empty($data['fecha_pago'])) {
-            $data['fecha_pago'] = strlen($data['fecha_pago']) === 10
-                ? $data['fecha_pago'] . ' ' . now()->format('H:i:s')
-                : $data['fecha_pago'];
-        } else {
-            $data['fecha_pago'] = now();
+        if (empty($data['fecha_pago'])) {
+            $data['fecha_pago'] = now()->toDateString();
         }
 
         $pago = PagoCliente::create($data);
@@ -111,6 +107,7 @@ class PagoClienteService
         }
 
         DB::commit();
+
         return $pago;
     }
 
@@ -124,7 +121,7 @@ class PagoClienteService
     public static function update($id, $data)
     {
         $pago = PagoCliente::find($id);
-        if (!$pago) {
+        if (! $pago) {
             return null;
         }
 
@@ -149,6 +146,7 @@ class PagoClienteService
         }
 
         DB::commit();
+
         return $pago;
     }
 
@@ -162,7 +160,7 @@ class PagoClienteService
     public static function delete($id)
     {
         $pago = PagoCliente::find($id);
-        if (!$pago) {
+        if (! $pago) {
             return null;
         }
 
@@ -188,6 +186,7 @@ class PagoClienteService
         }
 
         DB::commit();
+
         return $pago;
     }
 
@@ -202,7 +201,7 @@ class PagoClienteService
     public static function anular($id, array $data)
     {
         $pago = PagoCliente::find($id);
-        if (!$pago) {
+        if (! $pago) {
             return null;
         }
 
@@ -210,8 +209,6 @@ class PagoClienteService
         if ($estadoStr === PagoClienteEstado::ANULADO->value) {
             return false;
         }
-
-
 
         DB::beginTransaction();
 
