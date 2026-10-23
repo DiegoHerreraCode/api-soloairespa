@@ -18,13 +18,33 @@
             padding: 0;
         }
 
-        .w-100 { width: 100%; }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
-        .font-bold { font-weight: bold; }
-        .uppercase { text-transform: uppercase; }
-        .clear { clear: both; }
+        .w-100 {
+            width: 100%;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-left {
+            text-align: left;
+        }
+
+        .font-bold {
+            font-weight: bold;
+        }
+
+        .uppercase {
+            text-transform: uppercase;
+        }
+
+        .clear {
+            clear: both;
+        }
 
         /* Encabezado */
         .header-table {
@@ -284,7 +304,9 @@
             </td>
             <td style="width: 50%;" class="header-title-box">
                 <div class="header-main-title">COTIZACI&Oacute;N</div>
-                <div class="header-cotizacion-num">#{{ $cotizacion->num_cotizacion ?? ("COT-" . str_pad($cotizacion->id_cotizacion, 5, "0", STR_PAD_LEFT)) }}</div>
+                <div class="header-cotizacion-num">
+                    #{{ $cotizacion->num_cotizacion ?? ("COT-" . str_pad($cotizacion->id_cotizacion, 5, "0", STR_PAD_LEFT)) }}
+                </div>
                 <div>
                     @php
                         $tipoVal = is_object($cotizacion->tipo) ? ($cotizacion->tipo->value ?? "inicial") : ($cotizacion->tipo ?? "inicial");
@@ -334,8 +356,10 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ !empty($cotizacion->fecha_creacion) ? \Carbon\Carbon::parse($cotizacion->fecha_creacion)->format("d/m/Y") : date("d/m/Y") }}</td>
-                <td>{{ !empty($cotizacion->fecha_vencimiento) ? \Carbon\Carbon::parse($cotizacion->fecha_vencimiento)->format("d/m/Y") : "-" }}</td>
+                <td>{{ !empty($cotizacion->fecha_creacion) ? \Carbon\Carbon::parse($cotizacion->fecha_creacion)->format("d/m/Y") : date("d/m/Y") }}
+                </td>
+                <td>{{ !empty($cotizacion->fecha_vencimiento) ? \Carbon\Carbon::parse($cotizacion->fecha_vencimiento)->format("d/m/Y") : "-" }}
+                </td>
                 <td class="uppercase">{{ $tipoOrden->nombre ?? ($cotizacion->orden->tipoOrden->nombre ?? "N/A") }}</td>
                 <td class="font-bold">
                     {{ !empty($cotizacion->num_cotizacion_padre) ? $cotizacion->num_cotizacion_padre : "-" }}
@@ -350,6 +374,7 @@
         <table class="grid-table">
             <thead>
                 <tr>
+                    <th style="width: 10%;">SKU</th>
                     <th style="width: 7%;">ID INSUMO SAL.</th>
                     <th style="width: 7%;">ID REP. SAL.</th>
                     <th style="width: 7%;">ID REP. ENT.</th>
@@ -367,12 +392,19 @@
             <tbody>
                 @foreach($cotizacion->detallesInventario as $detInv)
                     @php
-                        $nombreItem = $detInv->inventarioInsumoSaliente->nombre 
-                            ?? $detInv->inventarioRepuestoSaliente->nombre 
-                            ?? $detInv->inventarioRepuestoEntrante->nombre 
+                        $nombreItem = $detInv->inventarioInsumoSaliente->nombre
+                            ?? $detInv->inventarioRepuestoSaliente->nombre
+                            ?? $detInv->inventarioRepuestoEntrante->nombre
+                            ?? "-";
+
+                        $skuItem = $detInv->inventarioInsumoSaliente->sku
+                            ?? $detInv->inventarioRepuestoSaliente->sku
+                            ?? $detInv->inventarioRepuestoEntrante->sku
+                            ?? $detInv->sku
                             ?? "-";
                     @endphp
                     <tr>
+                        <td>{{ $skuItem }}</td>
                         <td>{{ $detInv->id_inventario_insumo_saliente ?? "-" }}</td>
                         <td>{{ $detInv->id_inventario_repuesto_saliente ?? "-" }}</td>
                         <td>{{ $detInv->id_inventario_repuesto_entrante ?? "-" }}</td>
@@ -439,13 +471,15 @@
                 <div class="company-box-card">
                     <div class="company-name">{{ $empresa["nombre"] ?? "SOLO AIRE SPA" }}</div>
                     <div class="company-line font-bold">RUT: {{ $empresa["rut"] ?? "77.618.216-8" }}</div>
-                    <div class="company-line">{{ $empresa["direccion"] ?? "Maruri 857 Independencia, Santiago de Chile" }}</div>
+                    <div class="company-line">
+                        {{ $empresa["direccion"] ?? "Maruri 857 Independencia, Santiago de Chile" }}</div>
                     <div class="company-line">Tel&eacute;fono: {{ $empresa["telefono"] ?? "+56 985394629" }}</div>
                     <div class="company-line">Correo: {{ $empresa["correo"] ?? "Soloairespa@gmail.com" }}</div>
-                    
+
                     <div class="company-bank-title">DATOS BANCARIOS PARA TRANSFERENCIA:</div>
                     <div class="company-line font-bold">{{ $empresa["banco"] ?? "BANCO SANTANDER" }}</div>
-                    <div class="company-line">{{ $empresa["tipo_cuenta"] ?? "CUENTA CORRIENTE" }}: {{ $empresa["numero_cuenta"] ?? "0-000-8871366-4" }}</div>
+                    <div class="company-line">{{ $empresa["tipo_cuenta"] ?? "CUENTA CORRIENTE" }}:
+                        {{ $empresa["numero_cuenta"] ?? "0-000-8871366-4" }}</div>
                 </div>
             </td>
 
