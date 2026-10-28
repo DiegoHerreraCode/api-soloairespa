@@ -45,40 +45,43 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/cotizaciones/{id}/rechazar', [CotizacionController::class, 'rechazar']);
     Route::patch('/cotizaciones/{id}/anular', [CotizacionController::class, 'anular']);
 
+    // Endpoint especifico para generar archivo excel
+    Route::get('/inventario/export/excel', [InventarioController::class, 'exportExcel']);
+
     Route::apiResources([
         // Capa 1
-        'admins'                        => AdminController::class,
-        'marcas'                        => MarcaController::class,
-        'tipos-ordenes'                 => TipoOrdenController::class,
-        'tipos-servicios-taller'        => TipoServicioTallerController::class,
-        'clientes'                      => ClienteController::class,
-        'proveedores'                   => ProveedorController::class,
-        'personal'                      => PersonalController::class,
+        'admins' => AdminController::class,
+        'marcas' => MarcaController::class,
+        'tipos-ordenes' => TipoOrdenController::class,
+        'tipos-servicios-taller' => TipoServicioTallerController::class,
+        'clientes' => ClienteController::class,
+        'proveedores' => ProveedorController::class,
+        'personal' => PersonalController::class,
 
         // Capa 2
-        'modelos'                       => ModeloController::class,
-        'servicios-taller'              => ServicioTallerController::class,
-        'compras'                       => CompraController::class,
-        'cotizaciones'                  => CotizacionController::class,
+        'modelos' => ModeloController::class,
+        'servicios-taller' => ServicioTallerController::class,
+        'compras' => CompraController::class,
+        'cotizaciones' => CotizacionController::class,
 
         // Capa 3
-        'inventario'                    => InventarioController::class,
+        'inventario' => InventarioController::class,
 
         // Capa 4
-        'equipos'                       => EquipoController::class,
-        'ordenes'                       => OrdenController::class,
+        'equipos' => EquipoController::class,
+        'ordenes' => OrdenController::class,
 
         // Capa 5
-        'repuestos'                     => RepuestoController::class,
-        'pagos-clientes'                => PagoClienteController::class,
-        'pagos-compras'                 => PagoCompraController::class,
+        'repuestos' => RepuestoController::class,
+        'pagos-clientes' => PagoClienteController::class,
+        'pagos-compras' => PagoCompraController::class,
 
         // Capa 6
-        'reparaciones'                  => ReparacionController::class,
+        'reparaciones' => ReparacionController::class,
 
         // Capa 7 (Insumos, Servicios y Asignaciones)
-        'reparaciones-insumos'          => ReparacionInsumoController::class,
+        'reparaciones-insumos' => ReparacionInsumoController::class,
         'reparaciones-servicios-taller' => ReparacionServicioTallerController::class,
-        'asignaciones'                  => AsignacionController::class,
+        'asignaciones' => AsignacionController::class,
     ]);
 });

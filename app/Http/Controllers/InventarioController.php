@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Services\InventarioService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\InventarioExport;
 
 /**
  * Class InventarioController
@@ -218,5 +220,12 @@ class InventarioController extends Controller
         }
 
         return $this->successResponse($item, 'Item de inventario eliminado correctamente');
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $filters = $request->only(['sku', 'nombre', 'tipo', 'condicion']);
+        $fileName = 'inventario_' . now()->format('Y-m-d_His') . '.xlsx';
+        return Excel::download(new InventarioExport($filters), $fileName);
     }
 }
