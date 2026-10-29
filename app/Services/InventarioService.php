@@ -2,22 +2,22 @@
 
 namespace App\Services;
 
-use App\Models\Inventario;
+use App\Enums\InventarioCondicion;
+use App\Enums\OrdenEstadoOperativo;
+use App\Enums\ReparacionEstado;
 use App\Models\Admin;
-use App\Services\MailerService;
 use App\Models\DetalleCompra;
 use App\Models\DetalleOrden;
+use App\Models\Inventario;
+use App\Models\Orden;
 use App\Models\Reparacion;
 use App\Models\Repuesto;
-use App\Models\Orden;
-use App\Enums\ReparacionEstado;
-use App\Enums\OrdenEstadoOperativo;
-use App\Enums\InventarioCondicion;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Service InventarioService
- * 
+ *
  * Gestiona el catálogo de existencias y centraliza el motor de recálculo
  * económico exacto según la Guía de Validación Manual de Métricas:
  * - monto_compra_prom (Opción A: Nuevos/Equipos/Insumos ponderado de compras; Opción B: Usados ponderado de tasados).
@@ -31,7 +31,7 @@ class InventarioService
     /**
      * Retorna todos los ítems de inventario con su modelo y marca.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return Collection
      */
     public static function getAll()
     {
@@ -45,7 +45,7 @@ class InventarioService
     /**
      * Obtiene un ítem de inventario por su ID.
      *
-     * @param int|string $id
+     * @param  int|string  $id
      * @return Inventario|null
      */
     public static function getOne($id)
@@ -60,7 +60,7 @@ class InventarioService
     /**
      * Registra un nuevo ítem en inventario dentro de una transacción.
      *
-     * @param array $data
+     * @param  array  $data
      * @return Inventario
      */
     public static function create($data)
@@ -73,14 +73,15 @@ class InventarioService
 
         DB::commit();
         self::verificarYNotificarStockBajo($item);
+
         return $item;
     }
 
     /**
      * Actualiza atributos de un ítem de inventario.
      *
-     * @param int|string $id
-     * @param array $data
+     * @param  int|string  $id
+     * @param  array  $data
      * @return Inventario|null
      */
     public static function update($id, $data)
@@ -100,13 +101,14 @@ class InventarioService
 
         DB::commit();
         self::verificarYNotificarStockBajo($item);
+
         return $item;
     }
 
     /**
      * Elimina un ítem de inventario.
      *
-     * @param int|string $id
+     * @param  int|string  $id
      * @return Inventario|null
      */
     public static function delete($id)
@@ -125,15 +127,13 @@ class InventarioService
         $item->delete();
 
         DB::commit();
+
         return $item;
     }
 
     /**
      * Actualiza existencias tras una compra a proveedor y ejecuta el recálculo económico consolidado.
      *
-     * @param Inventario $item
-     * @param int $cantidadComprada
-     * @param float $costoUnitario
      * @return Inventario|null
      */
     public static function actualizarPorCompra(Inventario $item, int $cantidadComprada, float $costoUnitario)
@@ -154,8 +154,6 @@ class InventarioService
     /**
      * Actualiza métricas económicas de reparación tras finalizar una labor en taller.
      *
-     * @param Inventario $item
-     * @param float $costoBaseReparacion
      * @return Inventario|null
      */
     public static function actualizarPorReparacion(Inventario $item, float $costoBaseReparacion)
@@ -166,9 +164,6 @@ class InventarioService
     /**
      * Descuenta existencias tras una venta o salida de recambio y recalcula métricas ponderadas.
      *
-     * @param Inventario $item
-     * @param int $cantidadVendida
-     * @param float $precioVentaUnitario
      * @return Inventario|null
      */
     public static function actualizarPorVenta(Inventario $item, int $cantidadVendida, float $precioVentaUnitario)
@@ -189,9 +184,6 @@ class InventarioService
     /**
      * Descuenta existencias de cliente al entregar una reparación facturada y recalcula métricas.
      *
-     * @param Inventario $item
-     * @param int $cantidadReparada
-     * @param float $precioCobrado
      * @return Inventario|null
      */
     public static function actualizarPorReparacionEntrega(Inventario $item, int $cantidadReparada, float $precioCobrado)
@@ -212,8 +204,6 @@ class InventarioService
     /**
      * Ingresa existencias recibidas de un cliente para diagnóstico/reparación directa.
      *
-     * @param Inventario $item
-     * @param int $cantidadEntrante
      * @return Inventario
      */
     public static function sumarStockCliente(Inventario $item, int $cantidadEntrante = 1)
@@ -231,8 +221,6 @@ class InventarioService
     /**
      * Descuenta existencias de cliente (por ejemplo en cancelaciones o entregas sin reparación).
      *
-     * @param Inventario $item
-     * @param int $cantidadSaliente
      * @return Inventario
      */
     public static function restarStockCliente(Inventario $item, int $cantidadSaliente = 1)
@@ -250,7 +238,6 @@ class InventarioService
     /**
      * Motor central de recálculo económico exacto según las 4 métricas del negocio.
      *
-     * @param int $idInventario
      * @return Inventario|null
      */
     public static function recalcularMetricasCompletas(int $idInventario)
@@ -279,8 +266,8 @@ class InventarioService
             //   AND r."propietario" = true
             //   AND r."costo_adquisicion" > 0
             //   AND EXISTS (
-            //       SELECT 1 FROM "ordenes" o 
-            //       WHERE o."id_orden" = r."id_orden_entrada" 
+            //       SELECT 1 FROM "ordenes" o
+            //       WHERE o."id_orden" = r."id_orden_entrada"
             //         AND o."estado_operativo" != 'anulada'
             //   );
             $repuestosUsadosTasados = Repuesto::where('id_inventario', $idInventario)
@@ -342,7 +329,7 @@ class InventarioService
         // 2. CORROBORAR monto_reparacion_prom
         // =========================================================================
         // 1. Consulta la tabla reparaciones para los repuestos de ese id_inventario.
-        // 2. Considera solo los registros con estado = 'finalizada' cuya orden asociada no esté anulada 
+        // 2. Considera solo los registros con estado = 'finalizada' cuya orden asociada no esté anulada
         //    (si id_orden es null igualmente se toma en cuenta para el cálculo).
         // 3. Suma los costo_total y divide el resultado entre la cantidad de reparaciones válidas.
 
@@ -355,10 +342,10 @@ class InventarioService
         // WHERE rep."id_repuesto" IN (SELECT "id_repuesto" FROM "repuestos" WHERE "id_inventario" = :idInventario)
         //   AND rep."estado" = 'finalizada'
         //   AND (
-        //       rep."id_orden" IS NULL 
+        //       rep."id_orden" IS NULL
         //       OR EXISTS (
-        //           SELECT 1 FROM "ordenes" o 
-        //           WHERE o."id_orden" = rep."id_orden" 
+        //           SELECT 1 FROM "ordenes" o
+        //           WHERE o."id_orden" = rep."id_orden"
         //             AND o."estado_operativo" != 'anulada'
         //       )
         //   );
@@ -439,7 +426,7 @@ class InventarioService
 
         // Actualización final consolidada en inventario
         // Consulta SQL Raw equivalente:
-        // UPDATE "inventario" SET 
+        // UPDATE "inventario" SET
         //   "ultimo_monto_compra"  = :ultimoMontoCompra,
         //   "monto_compra_min"     = :minCompra,
         //   "monto_compra_max"     = :maxCompra,
@@ -476,8 +463,7 @@ class InventarioService
      * Evalúa una lista de ítems de inventario tras una operación de entrada o salida,
      * y si alguno quedó por debajo de su stock mínimo, notifica individualmente a cada admin.
      *
-     * @param mixed $items Colección, arreglo de modelos Inventario o IDs de inventario
-     * @return void
+     * @param  mixed  $items  Colección, arreglo de modelos Inventario o IDs de inventario
      */
     public static function verificarYNotificarStockBajo($items): void
     {
@@ -503,11 +489,11 @@ class InventarioService
             if ($item->stock_minimo !== null && (int) $item->cantidad_propia < (int) $item->stock_minimo) {
                 $tipoStr = $item->tipo ? (is_object($item->tipo) ? ($item->tipo->value ?? (string) $item->tipo) : (string) $item->tipo) : 'item';
                 $itemsEnRiesgo[$item->id_inventario] = [
-                    'sku'             => $item->sku,
-                    'nombre'          => $item->nombre,
-                    'tipo'            => ucfirst(strtolower($tipoStr)),
+                    'sku' => $item->sku,
+                    'nombre' => $item->nombre,
+                    'tipo' => ucfirst(strtolower($tipoStr)),
                     'cantidad_propia' => (int) $item->cantidad_propia,
-                    'stock_minimo'    => (int) $item->stock_minimo,
+                    'stock_minimo' => (int) $item->stock_minimo,
                 ];
             }
         }
@@ -530,9 +516,63 @@ class InventarioService
                 'emails.stock_bajo',
                 [
                     'admin_nombre' => $admin->nombre,
-                    'items'        => array_values($itemsEnRiesgo),
+                    'items' => array_values($itemsEnRiesgo),
                 ]
             );
         }
+    }
+
+    /**
+     * Busca todos los ítems de inventario donde cantidad_propia sea menor al stock_minimo.
+     * Si existen elementos críticos, obtiene los correos de los administradores y les envía
+     * una alerta por correo electrónico con la lista crítica de compras.
+     *
+     * @return int Cantidad de ítems en estado crítico encontrados.
+     */
+    public static function verificarYNotificarStockMinimo(): int
+    {
+        // Consulta SQL Raw equivalente:
+        // SELECT * FROM "inventario"
+        // WHERE "stock_minimo" IS NOT NULL AND "cantidad_propia" < "stock_minimo";
+        $itemsCriticos = Inventario::whereNotNull('stock_minimo')
+            ->whereColumn('cantidad_propia', '<', 'stock_minimo')
+            ->get();
+
+        if ($itemsCriticos->isEmpty()) {
+            return 0;
+        }
+
+        $itemsEnRiesgo = [];
+        foreach ($itemsCriticos as $item) {
+            $tipoStr = $item->tipo ? (is_object($item->tipo) ? ($item->tipo->value ?? (string) $item->tipo) : (string) $item->tipo) : 'item';
+            $itemsEnRiesgo[] = [
+                'sku' => $item->sku,
+                'nombre' => $item->nombre,
+                'tipo' => ucfirst(strtolower($tipoStr)),
+                'cantidad_propia' => (int) $item->cantidad_propia,
+                'stock_minimo' => (int) $item->stock_minimo,
+            ];
+        }
+
+        $admins = Admin::with('user')->get();
+
+        foreach ($admins as $admin) {
+            $email = $admin->user?->email;
+            if (!$email) {
+                continue;
+            }
+
+            MailerService::enviarCorreo(
+                ['to' => [$email]],
+                'Alerta: Items de Inventario Bajo Stock Mínimo',
+                'emails.stock_bajo',
+                [
+                    'admin_nombre' => $admin->nombre,
+                    'items' => $itemsEnRiesgo,
+                ]
+            );
+        }
+
+        return $itemsCriticos->count();
     }
 }

@@ -79,7 +79,7 @@ class CotizacionService
     {
         $ultimoId = Secuencia::where('modelo', 'App\Models\Cotizacion')->value('ultimo_id') ?? 0;
 
-        return 'COT-'.str_pad((int) $ultimoId + 1, 5, '0', STR_PAD_LEFT);
+        return 'COT-' . str_pad((int) $ultimoId + 1, 5, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -115,7 +115,7 @@ class CotizacionService
         // - Si es cotización INICIAL: genera nombres únicos agregando timestamp.
         // - Si es cotización EXTRA (o el repuesto ya tiene su service_tag definitivo): conserva el tag exacto.
         $mapaNombres = []; // Mapa [nombre_original => nombre_con_timestamp]
-        if (! empty($data['services_tags_repuestos_a_reparar'])) {
+        if (!empty($data['services_tags_repuestos_a_reparar'])) {
             $esTipoExtra = ($data['tipo'] ?? null) === CotizacionTipo::EXTRA->value || ($data['tipo'] ?? null) === CotizacionTipo::EXTRA;
             $tagsOriginales = $data['services_tags_repuestos_a_reparar'];
 
@@ -132,7 +132,7 @@ class CotizacionService
                 $idx = 1;
                 foreach ($tagsOriginales as $nomOriginal) {
                     $nomLimpio = trim((string) $nomOriginal);
-                    $nomConTimestamp = $nomLimpio.'_'.$timestamp.($idx > 1 ? "_{$idx}" : '');
+                    $nomConTimestamp = $nomLimpio . '_' . $timestamp . ($idx > 1 ? "_{$idx}" : '');
                     $nombresUnicos[] = $nomConTimestamp;
                     $mapaNombres[$nomLimpio] = $nomConTimestamp;
                     $idx++;
@@ -261,12 +261,12 @@ class CotizacionService
     public static function crearCotizacionExtraDesdeReparacion(int $idOrden, int $idRepuesto, array $payloadModificacion)
     {
         $orden = Orden::find($idOrden);
-        if (! $orden) {
+        if (!$orden) {
             return 'Orden no encontrada';
         }
 
         $repuesto = Repuesto::find($idRepuesto);
-        if (! $repuesto) {
+        if (!$repuesto) {
             return 'Repuesto no encontrado';
         }
 
@@ -371,7 +371,7 @@ class CotizacionService
             ->where('tipo', CotizacionTipo::EXTRA->value)
             ->where('estado', CotizacionEstado::PENDIENTE->value);
 
-        if (! empty($serviceTag)) {
+        if (!empty($serviceTag)) {
             $query->whereRaw('? = ANY(services_tags_repuestos_a_reparar)', [$serviceTag]);
         }
 
@@ -386,7 +386,7 @@ class CotizacionService
     public static function aceptar(int $idCotizacion, array $data = [])
     {
         $cotizacion = Cotizacion::with(['detallesInventario', 'detallesServiciosTaller', 'tipoOrden'])->find($idCotizacion);
-        if (! $cotizacion) {
+        if (!$cotizacion) {
             return 'Cotización no encontrada';
         }
 
@@ -421,7 +421,7 @@ class CotizacionService
                 ->values()
                 ->all();
 
-            if (! empty($idsInventarioAfectados)) {
+            if (!empty($idsInventarioAfectados)) {
                 InventarioService::verificarYNotificarStockBajo($idsInventarioAfectados);
             }
 
@@ -468,7 +468,7 @@ class CotizacionService
             ->values()
             ->all();
 
-        if (! empty($idsInventarioAfectados)) {
+        if (!empty($idsInventarioAfectados)) {
             InventarioService::verificarYNotificarStockBajo($idsInventarioAfectados);
         }
 
@@ -492,10 +492,10 @@ class CotizacionService
         //   AND "service_tag" = :nombreRep
         // LIMIT 1;
         $repuesto = Repuesto::where('id_orden_entrada', $cotizacion->id_orden)
-            ->when($nombreRep, fn ($q) => $q->where('service_tag', $nombreRep))
+            ->when($nombreRep, fn($q) => $q->where('service_tag', $nombreRep))
             ->first();
 
-        if (! $repuesto) {
+        if (!$repuesto) {
             return 'No se encontró el repuesto asociado a esta cotización en la orden';
         }
 
@@ -503,7 +503,7 @@ class CotizacionService
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "reparaciones" WHERE "id_repuesto" = :id_repuesto LIMIT 1;
         $reparacion = Reparacion::where('id_repuesto', $repuesto->id_repuesto)->first();
-        if (! $reparacion) {
+        if (!$reparacion) {
             return 'No se encontró la ficha de reparación para este repuesto';
         }
 
@@ -587,10 +587,10 @@ class CotizacionService
             $cantRequerida = (int) ($det->cantidad ?? 1);
 
             // Si la línea es un repuesto (serializable), consumimos tantos seriales del payload como cantidad tenga la línea
-            if (! empty($det->id_inventario_repuesto_saliente)) {
+            if (!empty($det->id_inventario_repuesto_saliente)) {
                 for ($k = 0; $k < $cantRequerida; $k++) {
                     $serialObj = $mapeosSeriales[$idxSerial] ?? null;
-                    if ($serialObj && ! empty($serialObj['id_repuesto_saliente'])) {
+                    if ($serialObj && !empty($serialObj['id_repuesto_saliente'])) {
                         $repuestosSalientesLinea[] = [
                             'id_repuesto' => (int) $serialObj['id_repuesto_saliente'],
                             'precio_unitario' => $det->precio_unitario,
@@ -604,7 +604,7 @@ class CotizacionService
                 'id_inventario_insumo_saliente' => $det->id_inventario_insumo_saliente,
                 'id_inventario_repuesto_saliente' => $det->id_inventario_repuesto_saliente,
                 'id_repuesto_saliente' => count($repuestosSalientesLinea) === 1 ? $repuestosSalientesLinea[0]['id_repuesto'] : null,
-                'repuestos_salientes' => ! empty($repuestosSalientesLinea) ? $repuestosSalientesLinea : null,
+                'repuestos_salientes' => !empty($repuestosSalientesLinea) ? $repuestosSalientesLinea : null,
                 'cantidad' => $det->cantidad,
                 'precio_unitario' => $det->precio_unitario,
                 'porcentaje_iva' => $det->porcentaje_iva,
@@ -644,7 +644,7 @@ class CotizacionService
                 'id_repuesto_saliente' => $mapeo['id_repuesto_saliente'] ?? null,
                 'precio_unitario' => $det->precio_unitario,
                 'id_inventario_repuesto_entrante' => $det->id_inventario_repuesto_entrante,
-                'serial_entrante' => $mapeo['serial_entrante'] ?? 'SN-REC-'.uniqid(),
+                'serial_entrante' => $mapeo['serial_entrante'] ?? 'SN-REC-' . uniqid(),
                 'service_tag_entrante' => $mapeo['service_tag_entrante'] ?? $mapeo['nombre_entrante'] ?? 'Repuesto Recambio Entrante',
                 'monto_tasacion' => (float) ($mapeo['monto_tasacion'] ?? $det->monto_tasacion ?? 0.00),
                 'porcentaje_iva' => $det->porcentaje_iva,
@@ -685,7 +685,7 @@ class CotizacionService
         ];
 
         $orden = OrdenService::create($ordenData);
-        if (! $orden || is_string($orden)) {
+        if (!$orden || is_string($orden)) {
             return $orden;
         }
 
@@ -697,16 +697,16 @@ class CotizacionService
             // 1. Intentar buscar por service_tag exacto o por prefijo original
             $repuesto = $repuestosCreados->first(function ($r) use ($nomRep) {
                 return $r->service_tag === $nomRep
-                    || str_starts_with($r->service_tag, $nomRep.'_')
-                    || str_starts_with($nomRep, $r->service_tag.'_');
+                    || str_starts_with($r->service_tag, $nomRep . '_')
+                    || str_starts_with($nomRep, $r->service_tag . '_');
             });
 
             // 2. Fallback: emparejar por índice secuencial del repuesto entrante en la orden
-            if (! $repuesto && isset($repuestosCreados[$idx])) {
+            if (!$repuesto && isset($repuestosCreados[$idx])) {
                 $repuesto = $repuestosCreados[$idx];
             }
 
-            if (! $repuesto) {
+            if (!$repuesto) {
                 continue;
             }
 
@@ -764,7 +764,7 @@ class CotizacionService
     public static function rechazar(int $idCotizacion)
     {
         $cotizacion = Cotizacion::find($idCotizacion);
-        if (! $cotizacion) {
+        if (!$cotizacion) {
             return 'Cotización no encontrada';
         }
 
@@ -785,7 +785,7 @@ class CotizacionService
     public static function anular(int $idCotizacion, array $data)
     {
         $cotizacion = Cotizacion::find($idCotizacion);
-        if (! $cotizacion) {
+        if (!$cotizacion) {
             return 'Cotización no encontrada';
         }
 
@@ -809,7 +809,7 @@ class CotizacionService
     public static function delete(int $id)
     {
         $cotizacion = Cotizacion::find($id);
-        if (! $cotizacion) {
+        if (!$cotizacion) {
             return null;
         }
 
@@ -830,5 +830,26 @@ class CotizacionService
         DB::commit();
 
         return $cotizacion;
+    }
+
+    /**
+     * Actualiza automáticamente a 'rechazada' todas las cotizaciones con estado 'pendiente'
+     * cuya fecha de vencimiento sea menor o igual al día de hoy.
+     *
+     * @return int Cantidad de cotizaciones actualizadas.
+     */
+    public static function actualizarCotizacionesVencidas(): int
+    {
+        $hoy = now()->toDateString();
+
+        // Consulta SQL Raw equivalente:
+        // UPDATE "cotizaciones" SET "estado" = 'rechazada'
+        // WHERE "estado" = 'pendiente' AND "fecha_vencimiento" <= :hoy;
+        return Cotizacion::where('estado', CotizacionEstado::PENDIENTE)
+            ->whereNotNull('fecha_vencimiento')
+            ->where('fecha_vencimiento', '<=', $hoy)
+            ->update([
+                'estado' => CotizacionEstado::RECHAZADA,
+            ]);
     }
 }

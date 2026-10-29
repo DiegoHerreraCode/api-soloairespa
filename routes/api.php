@@ -1,28 +1,32 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AsignacionController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\MarcaController;
-use App\Http\Controllers\TipoOrdenController;
-use App\Http\Controllers\TipoServicioTallerController;
 use App\Http\Controllers\ClienteController;
-use App\Http\Controllers\ProveedorController;
-use App\Http\Controllers\PersonalController;
-use App\Http\Controllers\ModeloController;
-use App\Http\Controllers\ServicioTallerController;
 use App\Http\Controllers\CompraController;
-use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\CotizacionController;
+use App\Http\Controllers\CronjobController;
 use App\Http\Controllers\EquipoController;
+use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\MarcaController;
+use App\Http\Controllers\ModeloController;
 use App\Http\Controllers\OrdenController;
-use App\Http\Controllers\RepuestoController;
 use App\Http\Controllers\PagoClienteController;
 use App\Http\Controllers\PagoCompraController;
+use App\Http\Controllers\PersonalController;
+use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\ReparacionController;
 use App\Http\Controllers\ReparacionInsumoController;
 use App\Http\Controllers\ReparacionServicioTallerController;
-use App\Http\Controllers\AsignacionController;
-use App\Http\Controllers\CotizacionController;
+use App\Http\Controllers\RepuestoController;
+use App\Http\Controllers\ServicioTallerController;
+use App\Http\Controllers\TipoOrdenController;
+use App\Http\Controllers\TipoServicioTallerController;
+use Illuminate\Support\Facades\Route;
+
+// Endpoint para el Cron-Job Externo
+Route::get('/cronjob/{token}', [CronjobController::class, 'run']);
 
 // Rutas Públicas (Sin Token)
 Route::post('/login', [AuthController::class, 'login']);
