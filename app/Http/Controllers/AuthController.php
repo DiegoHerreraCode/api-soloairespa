@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Services\UserService;
-use App\Services\MailerService;
 use App\Services\AdminService;
+use App\Services\MailerService;
+use App\Services\UserService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class AuthController
@@ -34,8 +36,7 @@ class AuthController extends Controller
      * -- INSERT INTO "users" ("id", "name", "email", "password", ...) VALUES (...);
      * -- INSERT INTO "admins" ("id_admin", "id_user", "nombre", "rut", ...) VALUES (...);
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function register(Request $request)
     {
@@ -48,30 +49,46 @@ class AuthController extends Controller
                 'min:8',
                 'regex:/[a-z]/',
                 'regex:/[A-Z]/',
-                'regex:/[0-9]/'
+                'regex:/[0-9]/',
             ],
             'rut' => 'required|string|max:100|unique:admins,rut',
             'num_tlf' => 'string|max:50|unique:admins,num_tlf',
             'direccion' => 'required|string|max:100',
         ], [
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
-            'password.regex' => 'La contraseña debe contener al menos una mayúscula, una minúscula y un número.'
+            'password.regex' => 'La contraseña debe contener al menos una mayúscula, una minúscula y un número.',
         ]);
 
         $data = $request->all();
 
-        $user = UserService::store($data);
+        DB::beginTransaction();
+        try {
+            $user = UserService::store($data);
 
-        MailerService::enviarCorreo([
-            'to' => [$user->email],
-            'cc' => [],
-            'bcc' => [],
-        ], 'Bienvenido', 'emails.register', ['nombre' => $user->name, 'email' => $user->email, 'password' => $request->password]);
+            $data['id_user'] = $user->id;
+            $data['nombre'] = $user->name;
 
-        $data['id_user'] = $user->id;
-        $data['nombre'] = $user->name;
+            $admin = AdminService::create($data);
 
-        $admin = AdminService::create($data);
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Error al registrar el administrador: '.$e->getMessage(),
+            ], 500);
+        }
+
+        // Enviar correo de bienvenida sin bloquear ni romper la transacción
+        try {
+            MailerService::enviarCorreo([
+                'to' => [$user->email],
+                'cc' => [],
+                'bcc' => [],
+            ], 'Bienvenido', 'emails.register', ['nombre' => $user->name, 'email' => $user->email, 'password' => $request->password]);
+        } catch (\Throwable $mailError) {
+            Log::warning('No se pudo enviar el correo de bienvenida: '.$mailError->getMessage());
+        }
 
         return response([
             'message' => 'Usuario registrado exitosamente',
@@ -93,8 +110,7 @@ class AuthController extends Controller
      * -- DELETE FROM "personal_access_tokens" WHERE "tokenable_id" = :id;
      * -- INSERT INTO "personal_access_tokens" (...) VALUES (...);
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function login(Request $request)
     {
@@ -105,13 +121,13 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'El usuario no existe',
             ], 401);
         }
 
-        if (!Hash::check($request->password, $user->password)) {
+        if (! Hash::check($request->password, $user->password)) {
             return response([
                 'message' => 'La contraseña es incorrecta',
             ], 401);
@@ -136,8 +152,7 @@ class AuthController extends Controller
      * Consulta SQL ejecutada:
      * -- DELETE FROM "personal_access_tokens" WHERE "tokenable_id" = :id;
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function logout(Request $request)
     {
@@ -151,8 +166,7 @@ class AuthController extends Controller
     /**
      * Retorna la información del usuario autenticado actual.
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function getUser(Request $request)
     {
@@ -176,8 +190,7 @@ class AuthController extends Controller
      * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
      * -- UPDATE "users" SET "codigo_verificacion" = :codigo, "updated_at" = NOW() WHERE "id" = :id;
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function forgotPassword(Request $request)
     {
@@ -187,7 +200,7 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'El usuario no existe',
             ], 401);
@@ -220,8 +233,7 @@ class AuthController extends Controller
      * Consulta SQL ejecutada:
      * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function verifyCode(Request $request)
     {
@@ -232,7 +244,7 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user || $user->codigo_verificacion !== $request->codigo) {
+        if (! $user || $user->codigo_verificacion !== $request->codigo) {
             return response([
                 'message' => 'El código de verificación es incorrecto',
             ], 401);
@@ -255,8 +267,7 @@ class AuthController extends Controller
      * -- SELECT * FROM "users" WHERE "email" = :email LIMIT 1;
      * -- UPDATE "users" SET "password" = :hash, "codigo_verificacion" = NULL, "updated_at" = NOW() WHERE "id" = :id;
      *
-     * @param Request $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function resetPassword(Request $request)
     {
@@ -268,16 +279,16 @@ class AuthController extends Controller
                 'min:8',
                 'regex:/[a-z]/',
                 'regex:/[A-Z]/',
-                'regex:/[0-9]/'
+                'regex:/[0-9]/',
             ],
         ], [
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
-            'password.regex' => 'La contraseña debe contener al menos una mayúscula, una minúscula y un número.'
+            'password.regex' => 'La contraseña debe contener al menos una mayúscula, una minúscula y un número.',
         ]);
 
         $user = UserService::getOne($request->email);
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'El usuario no existe',
             ], 401);
