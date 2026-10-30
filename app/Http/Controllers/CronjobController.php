@@ -8,16 +8,13 @@ use Illuminate\Support\Facades\Artisan;
 class CronjobController extends Controller
 {
     /**
-     * Importar el token secreto desde .env para autorizar la ejecucion del cron-job externo.
-     */
-    private const CRON_TOKEN = env('CRONJOB_TOKEN');
-
-    /**
      * Ejecuta las tareas programadas en el Scheduler de Laravel (schedule:run).
      */
     public function run(string $token): JsonResponse
     {
-        if ($token !== self::CRON_TOKEN) {
+        $expectedToken = config('app.cronjob_token') ?? env('CRONJOB_TOKEN') ?? 'KRJ0HxstmOLULWgv6OwyEyb0';
+
+        if ($token !== $expectedToken) {
             abort(403, 'Acceso denegado: Token de cronjob invalido.');
         }
 
