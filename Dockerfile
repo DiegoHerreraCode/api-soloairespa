@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     curl \
     libpng-dev \
     libxml2-dev \
+    libzip-dev \
     zip \
     unzip \
     git \
@@ -14,7 +15,7 @@ RUN apk add --no-cache \
     postgresql-dev
 
 # Instalar extensiones de PHP para Laravel 13
-RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd xml
+RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd xml zip
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
