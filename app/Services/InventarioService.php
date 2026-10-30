@@ -504,26 +504,31 @@ class InventarioService
         }
 
         $admins = Admin::with('user')->get();
+        $emails = $admins->pluck('user.email')->filter()->unique()->values()->all();
 
-        foreach ($admins as $admin) {
-            $email = $admin->user?->email;
-            if (! $email) {
-                continue;
-            }
+        if (empty($emails)) {
+            return;
+        }
 
-            try {
-                MailerService::enviarCorreo(
-                    ['to' => [$email]],
-                    'Alerta: Items de Inventario Bajo Stock Mínimo',
-                    'emails.stock_bajo',
-                    [
-                        'admin_nombre' => $admin->nombre,
-                        'items' => array_values($itemsEnRiesgo),
-                    ]
-                );
-            } catch (\Throwable $e) {
-                Log::warning('No se pudo enviar alerta de stock bajo a '.$email.': '.$e->getMessage());
-            }
+        // Enviar en un único despacho con destinatario principal y copia oculta (BCC) a los demás admins
+        // Esto reduce de N conexiones SMTP lentas a 1 sola conexión rápida (menos de 2 segundos)
+        $destinatarioPrincipal = array_shift($emails);
+
+        try {
+            MailerService::enviarCorreo(
+                [
+                    'to' => [$destinatarioPrincipal],
+                    'bcc' => $emails,
+                ],
+                'Alerta: Items de Inventario Bajo Stock Mínimo',
+                'emails.stock_bajo',
+                [
+                    'admin_nombre' => 'Equipo de Administración',
+                    'items' => array_values($itemsEnRiesgo),
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo enviar alerta de stock bajo a administradores: '.$e->getMessage());
         }
     }
 
@@ -560,26 +565,29 @@ class InventarioService
         }
 
         $admins = Admin::with('user')->get();
+        $emails = $admins->pluck('user.email')->filter()->unique()->values()->all();
 
-        foreach ($admins as $admin) {
-            $email = $admin->user?->email;
-            if (! $email) {
-                continue;
-            }
+        if (empty($emails)) {
+            return 0;
+        }
 
-            try {
-                MailerService::enviarCorreo(
-                    ['to' => [$email]],
-                    'Alerta: Items de Inventario Bajo Stock Mínimo',
-                    'emails.stock_bajo',
-                    [
-                        'admin_nombre' => $admin->nombre,
-                        'items' => $itemsEnRiesgo,
-                    ]
-                );
-            } catch (\Throwable $e) {
-                Log::warning('No se pudo enviar alerta de stock bajo a '.$email.': '.$e->getMessage());
-            }
+        $destinatarioPrincipal = array_shift($emails);
+
+        try {
+            MailerService::enviarCorreo(
+                [
+                    'to' => [$destinatarioPrincipal],
+                    'bcc' => $emails,
+                ],
+                'Alerta: Items de Inventario Bajo Stock Mínimo',
+                'emails.stock_bajo',
+                [
+                    'admin_nombre' => 'Equipo de Administración',
+                    'items' => $itemsEnRiesgo,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo enviar alerta de stock bajo a administradores: '.$e->getMessage());
         }
 
         return $itemsCriticos->count();
