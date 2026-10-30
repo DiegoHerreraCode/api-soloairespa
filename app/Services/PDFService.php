@@ -91,7 +91,8 @@ class PDFService
             $filename = 'cotizacion_'.($cotizacion->num_cotizacion ?: $cotizacion->id_cotizacion).'_'.time().'.pdf';
             $path = 'cotizaciones/'.$filename;
 
-            Storage::disk('public')->put($path, $pdf->output());
+            $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+            Storage::disk($disk)->put($path, $pdf->output());
 
             return $path;
         } catch (\Throwable $e) {
