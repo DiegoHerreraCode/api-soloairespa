@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
-
 /**
  * Class AuthController
  *
@@ -77,7 +76,7 @@ class AuthController extends Controller
             DB::rollBack();
 
             return response()->json([
-                'message' => 'Error al registrar el administrador: ' . $e->getMessage(),
+                'message' => 'Error al registrar el administrador: '.$e->getMessage(),
             ], 500);
         }
 
@@ -89,7 +88,7 @@ class AuthController extends Controller
                 'bcc' => [],
             ], 'Bienvenido', 'emails.register', ['nombre' => $user->name, 'email' => $user->email, 'password' => $request->password]);
         } catch (\Throwable $mailError) {
-            Log::warning('No se pudo enviar el correo de bienvenida: ' . $mailError->getMessage());
+            Log::warning('No se pudo enviar el correo de bienvenida: '.$mailError->getMessage());
         }
 
         return response([
@@ -123,13 +122,13 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'El usuario no existe',
             ], 401);
         }
 
-        if (!Hash::check($request->password, $user->password)) {
+        if (! Hash::check($request->password, $user->password)) {
             return response([
                 'message' => 'La contraseña es incorrecta',
             ], 401);
@@ -202,7 +201,7 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'El usuario no existe',
             ], 401);
@@ -210,11 +209,15 @@ class AuthController extends Controller
 
         $codigo = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
-        MailerService::enviarCorreo([
-            'to' => [$user->email],
-            'cc' => [],
-            'bcc' => [],
-        ], 'Codigo de verificacion', 'emails.password_code', ['nombre' => $user->name, 'codigo' => $codigo]);
+        try {
+            MailerService::enviarCorreo([
+                'to' => [$user->email],
+                'cc' => [],
+                'bcc' => [],
+            ], 'Codigo de verificacion', 'emails.password_code', ['nombre' => $user->name, 'codigo' => $codigo]);
+        } catch (\Throwable $mailError) {
+            Log::warning('No se pudo enviar correo de codigo de verificacion: '.$mailError->getMessage());
+        }
 
         // Guardar el código en la base de datos
         $user->codigo_verificacion = $codigo;
@@ -246,7 +249,7 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user || $user->codigo_verificacion !== $request->codigo) {
+        if (! $user || $user->codigo_verificacion !== $request->codigo) {
             return response([
                 'message' => 'El código de verificación es incorrecto',
             ], 401);
@@ -290,7 +293,7 @@ class AuthController extends Controller
 
         $user = UserService::getOne($request->email);
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'El usuario no existe',
             ], 401);
@@ -300,11 +303,15 @@ class AuthController extends Controller
         $user->codigo_verificacion = null;
         $user->save();
 
-        MailerService::enviarCorreo([
-            'to' => [$user->email],
-            'cc' => [],
-            'bcc' => [],
-        ], 'Contraseña actualizada', 'emails.password_changed_notification', ['nombre' => $user->name, 'email' => $user->email, 'password' => $request->password]);
+        try {
+            MailerService::enviarCorreo([
+                'to' => [$user->email],
+                'cc' => [],
+                'bcc' => [],
+            ], 'Contraseña actualizada', 'emails.password_changed_notification', ['nombre' => $user->name, 'email' => $user->email, 'password' => $request->password]);
+        } catch (\Throwable $mailError) {
+            Log::warning('No se pudo enviar correo de cambio de contraseña: '.$mailError->getMessage());
+        }
 
         return response([
             'message' => 'Contraseña actualizada exitosamente',

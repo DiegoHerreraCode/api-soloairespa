@@ -72,7 +72,34 @@ class OrdenService
         $tipoOrden = TipoOrden::find($data['id_tipo_orden']);
         $nombreTipo = $tipoOrden ? strtolower(trim($tipoOrden->nombre)) : '';
 
-        // 1. Estados iniciales por defecto de la orden:
+        // 1. Validar disponibilidad de stock propio antes de crear la orden
+        if (in_array($nombreTipo, ['venta', 'recambio'])) {
+            foreach ($detalles as $linea) {
+                if (! empty($linea['id_inventario_insumo_saliente'])) {
+                    $item = Inventario::find($linea['id_inventario_insumo_saliente']);
+                    $cantRequerida = (int) ($linea['cantidad'] ?? 1);
+                    $stockDisponible = $item ? (int) $item->cantidad_propia : 0;
+                    if ($cantRequerida > $stockDisponible) {
+                        DB::rollBack();
+                        throw new \Exception("Stock insuficiente para el insumo '{$item?->nombre}'. Solicitado: {$cantRequerida}, Disponible: {$stockDisponible}");
+                    }
+                }
+
+                if (! empty($linea['id_inventario_repuesto_saliente'])) {
+                    $item = Inventario::find($linea['id_inventario_repuesto_saliente']);
+                    $cantRequerida = ! empty($linea['repuestos_salientes']) && is_array($linea['repuestos_salientes'])
+                        ? count($linea['repuestos_salientes'])
+                        : (int) ($linea['cantidad'] ?? 1);
+                    $stockDisponible = $item ? (int) $item->cantidad_propia : 0;
+                    if ($cantRequerida > $stockDisponible) {
+                        DB::rollBack();
+                        throw new \Exception("Stock insuficiente para el repuesto '{$item?->nombre}'. Solicitado: {$cantRequerida}, Disponible: {$stockDisponible}");
+                    }
+                }
+            }
+        }
+
+        // 2. Estados iniciales por defecto de la orden:
         // Ventas y Recambios nacen directamente como "finalizada" operativamente
         if (in_array($nombreTipo, ['venta', 'recambio'])) {
             $data['estado_operativo'] = OrdenEstadoOperativo::FINALIZADA->value;

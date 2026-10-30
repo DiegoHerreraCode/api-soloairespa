@@ -14,6 +14,7 @@ use App\Models\Reparacion;
 use App\Models\Repuesto;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Service InventarioService
@@ -89,7 +90,7 @@ class InventarioService
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "inventario" WHERE "id_inventario" = :id LIMIT 1;
         $item = Inventario::find($id);
-        if (!$item) {
+        if (! $item) {
             return null;
         }
 
@@ -116,7 +117,7 @@ class InventarioService
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "inventario" WHERE "id_inventario" = :id LIMIT 1;
         $item = Inventario::find($id);
-        if (!$item) {
+        if (! $item) {
             return null;
         }
 
@@ -245,7 +246,7 @@ class InventarioService
         // Consulta SQL Raw equivalente:
         // SELECT * FROM "inventario" WHERE "id_inventario" = :idInventario LIMIT 1;
         $item = Inventario::find($idInventario);
-        if (!$item) {
+        if (! $item) {
             return null;
         }
 
@@ -279,7 +280,7 @@ class InventarioService
                 ->get();
 
             if ($repuestosUsadosTasados->isNotEmpty()) {
-                $costosTasaciones = $repuestosUsadosTasados->pluck('costo_adquisicion')->map(fn($v) => (float) $v);
+                $costosTasaciones = $repuestosUsadosTasados->pluck('costo_adquisicion')->map(fn ($v) => (float) $v);
                 $minCompra = $costosTasaciones->min();
                 $maxCompra = $costosTasaciones->max();
                 $sumaTasaciones = (float) $costosTasaciones->sum();
@@ -305,11 +306,11 @@ class InventarioService
             // SELECT * FROM "detalles_compras" WHERE "id_inventario" = :idInventario;
             $detallesCompras = DetalleCompra::where('id_inventario', $idInventario)->get();
             if ($detallesCompras->isNotEmpty()) {
-                $costosCompras = $detallesCompras->pluck('costo_unitario')->map(fn($v) => (float) $v);
+                $costosCompras = $detallesCompras->pluck('costo_unitario')->map(fn ($v) => (float) $v);
                 $minCompra = $costosCompras->min();
                 $maxCompra = $costosCompras->max();
 
-                $sumaCostoTotal = (float) $detallesCompras->sum(fn($d) => (float) $d->costo_unitario * (int) $d->cantidad);
+                $sumaCostoTotal = (float) $detallesCompras->sum(fn ($d) => (float) $d->costo_unitario * (int) $d->cantidad);
                 $sumaCantidades = (int) $detallesCompras->sum('cantidad');
                 $promCompra = $sumaCantidades > 0 ? round($sumaCostoTotal / $sumaCantidades, 2) : 0.00;
 
@@ -360,7 +361,7 @@ class InventarioService
             ->get();
 
         if ($reparacionesValidas->isNotEmpty()) {
-            $costosRep = $reparacionesValidas->pluck('costo_total')->map(fn($v) => (float) $v)->filter(fn($v) => $v > 0);
+            $costosRep = $reparacionesValidas->pluck('costo_total')->map(fn ($v) => (float) $v)->filter(fn ($v) => $v > 0);
             $minRep = $costosRep->isNotEmpty() ? $costosRep->min() : null;
             $maxRep = $costosRep->isNotEmpty() ? $costosRep->max() : null;
             $sumaCostosRep = (float) $costosRep->sum();
@@ -395,11 +396,11 @@ class InventarioService
             ->get();
 
         if ($detallesVentas->isNotEmpty()) {
-            $preciosVenta = $detallesVentas->pluck('precio_unitario')->map(fn($v) => (float) $v)->filter(fn($v) => $v > 0);
+            $preciosVenta = $detallesVentas->pluck('precio_unitario')->map(fn ($v) => (float) $v)->filter(fn ($v) => $v > 0);
             $minVenta = $preciosVenta->isNotEmpty() ? $preciosVenta->min() : null;
             $maxVenta = $preciosVenta->isNotEmpty() ? $preciosVenta->max() : null;
 
-            $sumaTotalDinero = (float) $detallesVentas->sum(fn($d) => (float) $d->precio_unitario * (int) $d->cantidad);
+            $sumaTotalDinero = (float) $detallesVentas->sum(fn ($d) => (float) $d->precio_unitario * (int) $d->cantidad);
             $sumaCantidades = (int) $detallesVentas->sum('cantidad');
             $promVenta = $sumaCantidades > 0 ? round($sumaTotalDinero / $sumaCantidades, 2) : null;
         } else {
@@ -471,17 +472,17 @@ class InventarioService
             return;
         }
 
-        if (!is_iterable($items)) {
+        if (! is_iterable($items)) {
             $items = [$items];
         }
 
         $itemsEnRiesgo = [];
 
         foreach ($items as $item) {
-            if (!$item instanceof Inventario) {
+            if (! $item instanceof Inventario) {
                 $item = Inventario::find($item);
             }
-            if (!$item) {
+            if (! $item) {
                 continue;
             }
 
@@ -506,19 +507,23 @@ class InventarioService
 
         foreach ($admins as $admin) {
             $email = $admin->user?->email;
-            if (!$email) {
+            if (! $email) {
                 continue;
             }
 
-            MailerService::enviarCorreo(
-                ['to' => [$email]],
-                'Alerta: Items de Inventario Bajo Stock Mínimo',
-                'emails.stock_bajo',
-                [
-                    'admin_nombre' => $admin->nombre,
-                    'items' => array_values($itemsEnRiesgo),
-                ]
-            );
+            try {
+                MailerService::enviarCorreo(
+                    ['to' => [$email]],
+                    'Alerta: Items de Inventario Bajo Stock Mínimo',
+                    'emails.stock_bajo',
+                    [
+                        'admin_nombre' => $admin->nombre,
+                        'items' => array_values($itemsEnRiesgo),
+                    ]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo enviar alerta de stock bajo a '.$email.': '.$e->getMessage());
+            }
         }
     }
 
@@ -558,19 +563,23 @@ class InventarioService
 
         foreach ($admins as $admin) {
             $email = $admin->user?->email;
-            if (!$email) {
+            if (! $email) {
                 continue;
             }
 
-            MailerService::enviarCorreo(
-                ['to' => [$email]],
-                'Alerta: Items de Inventario Bajo Stock Mínimo',
-                'emails.stock_bajo',
-                [
-                    'admin_nombre' => $admin->nombre,
-                    'items' => $itemsEnRiesgo,
-                ]
-            );
+            try {
+                MailerService::enviarCorreo(
+                    ['to' => [$email]],
+                    'Alerta: Items de Inventario Bajo Stock Mínimo',
+                    'emails.stock_bajo',
+                    [
+                        'admin_nombre' => $admin->nombre,
+                        'items' => $itemsEnRiesgo,
+                    ]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo enviar alerta de stock bajo a '.$email.': '.$e->getMessage());
+            }
         }
 
         return $itemsCriticos->count();

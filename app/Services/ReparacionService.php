@@ -83,7 +83,7 @@ class ReparacionService
         $reparacion = Reparacion::create($data);
 
         // 3. Procesar insumos si fueron proporcionados
-        if (!empty($insumos) && is_array($insumos)) {
+        if (! empty($insumos) && is_array($insumos)) {
             foreach ($insumos as $insumoData) {
                 $insumoData['id_reparacion'] = $reparacion->id_reparacion;
                 $userId = auth()->id();
@@ -95,7 +95,7 @@ class ReparacionService
         }
 
         // 4. Procesar servicios si fueron proporcionados
-        if (!empty($servicios) && is_array($servicios)) {
+        if (! empty($servicios) && is_array($servicios)) {
             foreach ($servicios as $servicioData) {
                 $servicioData['id_reparacion'] = $reparacion->id_reparacion;
                 $userId = auth()->id();
@@ -126,7 +126,7 @@ class ReparacionService
     public static function update($id, $data)
     {
         $reparacion = Reparacion::find($id);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return null;
         }
 
@@ -143,17 +143,17 @@ class ReparacionService
 
         // 1. Si pasa a 'en_proceso'
         if ($estadoStr === 'en_proceso') {
-            if (empty($reparacion->fecha_inicio) && !isset($data['fecha_inicio'])) {
+            if (empty($reparacion->fecha_inicio) && ! isset($data['fecha_inicio'])) {
                 $data['fecha_inicio'] = now();
             }
-            if (empty($reparacion->id_admin_fecha_inicio) && !isset($data['id_admin_fecha_inicio'])) {
+            if (empty($reparacion->id_admin_fecha_inicio) && ! isset($data['id_admin_fecha_inicio'])) {
                 $userId = auth()->id();
                 $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
                 $data['id_admin_fecha_inicio'] = $admin ? $admin->id_admin : 1;
             }
 
             // Si la reparacin pertenece a una orden, poner automticamente la orden en 'en_proceso'
-            if (!empty($reparacion->id_orden)) {
+            if (! empty($reparacion->id_orden)) {
                 $orden = Orden::find($reparacion->id_orden);
                 if ($orden && $orden->estado_operativo === OrdenEstadoOperativo::EN_ESPERA) {
                     $orden->update([
@@ -166,17 +166,17 @@ class ReparacionService
 
         // 2. Si pasa a 'finalizada'
         if ($estadoStr === 'finalizada') {
-            if (empty($reparacion->fecha_fin) && !isset($data['fecha_fin'])) {
+            if (empty($reparacion->fecha_fin) && ! isset($data['fecha_fin'])) {
                 $data['fecha_fin'] = now();
             }
-            if (empty($reparacion->id_admin_fecha_fin) && !isset($data['id_admin_fecha_fin'])) {
+            if (empty($reparacion->id_admin_fecha_fin) && ! isset($data['id_admin_fecha_fin'])) {
                 $userId = auth()->id();
                 $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
                 $data['id_admin_fecha_fin'] = $admin ? $admin->id_admin : 1;
             }
 
             // Procesar insumos sobrantes devueltos al inventario si vienen especificados
-            if (!empty($insumosDevueltos) && is_array($insumosDevueltos)) {
+            if (! empty($insumosDevueltos) && is_array($insumosDevueltos)) {
                 $mapaDevueltos = collect($insumosDevueltos)->keyBy('id_reparacion_insumo');
                 $insumosRep = ReparacionInsumo::where('id_reparacion', $reparacion->id_reparacion)->get();
 
@@ -200,7 +200,7 @@ class ReparacionService
             }
         }
 
-        if (!empty($data)) {
+        if (! empty($data)) {
             $reparacion->update($data);
         }
 
@@ -225,7 +225,7 @@ class ReparacionService
 
         DB::commit();
 
-        if (!empty($insumosAfectadosIds)) {
+        if (! empty($insumosAfectadosIds)) {
             InventarioService::verificarYNotificarStockBajo($insumosAfectadosIds);
         }
 
@@ -244,7 +244,7 @@ class ReparacionService
     public static function delete($id)
     {
         $reparacion = Reparacion::find($id);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return null;
         }
 
@@ -282,7 +282,7 @@ class ReparacionService
 
         DB::commit();
 
-        if (!empty($insumosAfectadosIds)) {
+        if (! empty($insumosAfectadosIds)) {
             InventarioService::verificarYNotificarStockBajo(array_values(array_unique($insumosAfectadosIds)));
         }
 
@@ -307,9 +307,9 @@ class ReparacionService
             $idInsumo = $insumoData['id_reparacion_insumo'] ?? null;
 
             // Auto-matching: si no vino id_reparacion_insumo, buscar por id_inventario entre los existentes no reclamados
-            if (!$idInsumo && !empty($insumoData['id_inventario'])) {
+            if (! $idInsumo && ! empty($insumoData['id_inventario'])) {
                 $existente = $insumosActuales->first(function ($item, $key) use ($insumoData, $idsConservados) {
-                    return $item->id_inventario == $insumoData['id_inventario'] && !in_array($key, $idsConservados);
+                    return $item->id_inventario == $insumoData['id_inventario'] && ! in_array($key, $idsConservados);
                 });
                 if ($existente) {
                     $idInsumo = $existente->id_reparacion_insumo;
@@ -333,7 +333,7 @@ class ReparacionService
 
         // Eliminar insumos que estaban antes pero ya no vienen en el payload
         foreach ($insumosActuales as $idInsumo => $insumo) {
-            if (!in_array($idInsumo, $idsConservados)) {
+            if (! in_array($idInsumo, $idsConservados)) {
                 $idsInventariosAfectados[] = $insumo->id_inventario;
                 ReparacionInsumoService::delete($idInsumo);
             }
@@ -359,9 +359,9 @@ class ReparacionService
             $idServicio = $servicioData['id_reparacion_servicio_taller'] ?? null;
 
             // Auto-matching: si no vino id_reparacion_servicio_taller, buscar por id_servicio_taller entre los existentes no reclamados
-            if (!$idServicio && !empty($servicioData['id_servicio_taller'])) {
+            if (! $idServicio && ! empty($servicioData['id_servicio_taller'])) {
                 $existente = $serviciosActuales->first(function ($item, $key) use ($servicioData, $idsConservados) {
-                    return $item->id_servicio_taller == $servicioData['id_servicio_taller'] && !in_array($key, $idsConservados);
+                    return $item->id_servicio_taller == $servicioData['id_servicio_taller'] && ! in_array($key, $idsConservados);
                 });
                 if ($existente) {
                     $idServicio = $existente->id_reparacion_servicio_taller;
@@ -386,7 +386,7 @@ class ReparacionService
 
         // Eliminar servicios que ya no vienen en el payload
         foreach ($serviciosActuales as $idServicio => $servicio) {
-            if (!in_array($idServicio, $idsConservados)) {
+            if (! in_array($idServicio, $idsConservados)) {
                 ReparacionServicioTallerService::delete($idServicio);
             }
         }
@@ -402,18 +402,25 @@ class ReparacionService
     {
         $item = Inventario::find($data['id_inventario']);
         $cantidad = (int) ($data['cantidad'] ?? 1);
+
+        // Validar disponibilidad de stock propio antes de registrar el consumo
+        $stockDisponible = $item ? (int) $item->cantidad_propia : 0;
+        if ($cantidad > $stockDisponible) {
+            throw new \Exception("Stock insuficiente para el insumo '{$item?->nombre}'. Solicitado: {$cantidad}, Disponible en taller: {$stockDisponible}");
+        }
+
         $costoUnitario = (float) ($data['costo_unitario'] ?? ($item ? $item->monto_compra_prom : 0.00));
         $porcentajeGanancia = (float) ($item ? $item->porcentaje_ganancia : 0.00);
 
-        if (!isset($data['costo_unitario'])) {
+        if (! isset($data['costo_unitario'])) {
             $data['costo_unitario'] = $costoUnitario;
         }
 
-        if (!isset($data['monto_total_linea'])) {
+        if (! isset($data['monto_total_linea'])) {
             $data['monto_total_linea'] = round($cantidad * $costoUnitario, 2);
         }
 
-        if (!isset($data['costo_unitario_con_ganancia'])) {
+        if (! isset($data['costo_unitario_con_ganancia'])) {
             if ($porcentajeGanancia > 0 && $porcentajeGanancia < 100) {
                 $data['costo_unitario_con_ganancia'] = round($costoUnitario / (1 - ($porcentajeGanancia / 100)), 2);
             } else {
@@ -421,14 +428,14 @@ class ReparacionService
             }
         }
 
-        if (!isset($data['monto_total_linea_con_ganancia'])) {
+        if (! isset($data['monto_total_linea_con_ganancia'])) {
             $data['monto_total_linea_con_ganancia'] = round($cantidad * (float) $data['costo_unitario_con_ganancia'], 2);
         }
 
         $porcentajeIva = (float) ($data['porcentaje_iva'] ?? 19.00);
         $data['porcentaje_iva'] = $porcentajeIva;
 
-        if (!isset($data['monto_iva'])) {
+        if (! isset($data['monto_iva'])) {
             $data['monto_iva'] = round((float) $data['monto_total_linea_con_ganancia'] * ($porcentajeIva / 100), 2);
         }
 
@@ -461,26 +468,26 @@ class ReparacionService
         $ganancia = (float) ($servicioTaller ? $servicioTaller->porcentaje_ganancia : 0.00);
         $costoConGanancia = (float) ($data['costo_unitario_con_ganancia'] ?? (($ganancia > 0 && $ganancia < 100) ? round($costoUnitario / (1 - ($ganancia / 100)), 2) : $costoUnitario));
 
-        if (!isset($data['costo_unitario'])) {
+        if (! isset($data['costo_unitario'])) {
             $data['costo_unitario'] = $costoUnitario;
         }
 
-        if (!isset($data['monto_total_linea'])) {
+        if (! isset($data['monto_total_linea'])) {
             $data['monto_total_linea'] = round($cantidad * $costoUnitario, 2);
         }
 
-        if (!isset($data['costo_unitario_con_ganancia'])) {
+        if (! isset($data['costo_unitario_con_ganancia'])) {
             $data['costo_unitario_con_ganancia'] = $costoConGanancia;
         }
 
-        if (!isset($data['monto_total_linea_con_ganancia'])) {
+        if (! isset($data['monto_total_linea_con_ganancia'])) {
             $data['monto_total_linea_con_ganancia'] = round($cantidad * $costoConGanancia, 2);
         }
 
         $porcentajeIva = (float) ($data['porcentaje_iva'] ?? 19.00);
         $data['porcentaje_iva'] = $porcentajeIva;
 
-        if (!isset($data['monto_iva'])) {
+        if (! isset($data['monto_iva'])) {
             $data['monto_iva'] = round((float) $data['monto_total_linea_con_ganancia'] * ($porcentajeIva / 100), 2);
         }
 
@@ -497,7 +504,7 @@ class ReparacionService
     public static function recalcularCostosReparacion($idReparacion)
     {
         $reparacion = Reparacion::find($idReparacion);
-        if (!$reparacion) {
+        if (! $reparacion) {
             return;
         }
 
@@ -568,7 +575,7 @@ class ReparacionService
         }
 
         // Si la reparaci�n pertenece a una orden de cliente
-        if (!empty($reparacion->id_orden)) {
+        if (! empty($reparacion->id_orden)) {
             $orden = Orden::find($reparacion->id_orden);
             if ($orden) {
                 // Verificar si todav�a existen repuestos ingresados en esta orden sin haber culminado su reparaci�n

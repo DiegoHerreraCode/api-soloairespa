@@ -249,11 +249,15 @@ class ReparacionController extends Controller
                 return $this->errorResponse('La reparación debe estar vinculada a una orden para generar cotización extra', 422);
             }
 
-            $resultado = CotizacionService::crearCotizacionExtraDesdeReparacion(
-                $rep->id_orden,
-                $rep->id_repuesto,
-                $data
-            );
+            try {
+                $resultado = CotizacionService::crearCotizacionExtraDesdeReparacion(
+                    $rep->id_orden,
+                    $rep->id_repuesto,
+                    $data
+                );
+            } catch (\Throwable $e) {
+                return $this->errorResponse($e->getMessage(), 422);
+            }
 
             if (is_string($resultado)) {
                 return $this->errorResponse($resultado, 422);
@@ -302,7 +306,12 @@ class ReparacionController extends Controller
         }
 
         // 3. Ejecutar guardado directo en ReparacionService
-        $reparacion = ReparacionService::update($id, $data);
+        try {
+            $reparacion = ReparacionService::update($id, $data);
+        } catch (\Throwable $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        }
+
         if (! $reparacion) {
             return $this->errorResponse('Reparación no encontrada', 404);
         }

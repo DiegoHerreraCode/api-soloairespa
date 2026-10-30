@@ -2,14 +2,14 @@
 
 namespace App\Services;
 
-use App\Models\ReparacionInsumo;
-use App\Models\Inventario;
 use App\Models\Admin;
+use App\Models\Inventario;
+use App\Models\ReparacionInsumo;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Service ReparacionInsumoService
- * 
+ *
  * Gestiona el consumo, edici�n y eliminaci�n de insumos cargados a una reparaci�n.
  * Sincroniza en tiempo real las existencias f�sicas de inventario (descontando o reintegrando stock)
  * y dispara el rec�lculo consolidado de costos de la reparaci�n.
@@ -71,7 +71,7 @@ class ReparacionInsumoService
     public static function update($id, $data)
     {
         $insumo = ReparacionInsumo::find($id);
-        if (!$insumo) {
+        if (! $insumo) {
             return null;
         }
 
@@ -84,6 +84,14 @@ class ReparacionInsumoService
         if (isset($data['cantidad'])) {
             $nuevaCantidad = (int) $data['cantidad'];
             $diferencia = $nuevaCantidad - $cantidadAnterior;
+
+            if ($item && $diferencia > 0) {
+                $stockDisponible = (int) $item->cantidad_propia;
+                if ($diferencia > $stockDisponible) {
+                    DB::rollBack();
+                    throw new \Exception("Stock insuficiente para incrementar el insumo '{$item->nombre}'. Unidades adicionales requeridas: {$diferencia}, Disponibles: {$stockDisponible}");
+                }
+            }
 
             if ($item && $diferencia != 0) {
                 $item->update([
@@ -120,7 +128,7 @@ class ReparacionInsumoService
     public static function delete($id)
     {
         $insumo = ReparacionInsumo::find($id);
-        if (!$insumo) {
+        if (! $insumo) {
             return null;
         }
 

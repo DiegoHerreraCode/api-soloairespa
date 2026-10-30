@@ -106,7 +106,12 @@ class OrdenController extends Controller
 
         $data = $request->all();
 
-        $orden = OrdenService::create($data);
+        try {
+            $orden = OrdenService::create($data);
+        } catch (\Throwable $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        }
+
         if (! $orden) {
             return $this->errorResponse('Orden no creada', 404);
         }

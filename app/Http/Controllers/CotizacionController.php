@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\CotizacionService;
 use App\Models\Admin;
-use App\Services\PDFService;
+use App\Services\CotizacionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,6 +30,7 @@ class CotizacionController extends Controller
     public function index(): JsonResponse
     {
         $cotizaciones = CotizacionService::getAll();
+
         return $this->successResponse(
             $cotizaciones,
             $cotizaciones->isEmpty() ? 'No se encontraron cotizaciones' : 'Cotizaciones obtenidas correctamente'
@@ -45,9 +45,6 @@ class CotizacionController extends Controller
      * 2. En reparaciones, agrega timestamp único a cada nombre de repuesto.
      * 3. Registra las líneas en cotizaciones_inventario y cotizaciones_servicios_taller.
      * 4. Retorna la cotización creada con código 201.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {
@@ -88,9 +85,13 @@ class CotizacionController extends Controller
             $data['id_admin'] = $admin ? $admin->id_admin : 1;
         }
 
-        $cotizacion = CotizacionService::create($data);
+        try {
+            $cotizacion = CotizacionService::create($data);
+        } catch (\Throwable $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        }
 
-        if (!$cotizacion) {
+        if (! $cotizacion) {
             return $this->errorResponse('Cotización no creada', 404);
         }
 
@@ -100,13 +101,12 @@ class CotizacionController extends Controller
     /**
      * Consulta y entrega la información de una cotización con sus detalles por ID.
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function show($id): JsonResponse
     {
         $cotizacion = CotizacionService::getOne($id);
-        if (!$cotizacion) {
+        if (! $cotizacion) {
             return $this->errorResponse('Cotización no encontrada', 404);
         }
 
@@ -116,9 +116,7 @@ class CotizacionController extends Controller
     /**
      * Acepta una cotización por parte del cliente y genera la orden o aplica cambios en taller.
      *
-     * @param Request $request
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function aceptar(Request $request, $id): JsonResponse
     {
@@ -135,8 +133,7 @@ class CotizacionController extends Controller
     /**
      * Rechaza formalmente una cotización.
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function rechazar($id): JsonResponse
     {
@@ -152,9 +149,7 @@ class CotizacionController extends Controller
     /**
      * Anula una cotización registrando motivo y administrador.
      *
-     * @param Request $request
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function anular(Request $request, $id): JsonResponse
     {
@@ -179,8 +174,7 @@ class CotizacionController extends Controller
     /**
      * Elimina físicamente una cotización si aún no fue aceptada.
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function destroy($id): JsonResponse
     {
@@ -190,7 +184,7 @@ class CotizacionController extends Controller
             return $this->errorResponse($resultado, 422);
         }
 
-        if (!$resultado) {
+        if (! $resultado) {
             return $this->errorResponse('Cotización no encontrada o no se pudo eliminar', 404);
         }
 

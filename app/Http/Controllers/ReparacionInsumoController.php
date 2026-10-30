@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ReparacionInsumoService;
 use App\Services\InventarioService;
+use App\Services\ReparacionInsumoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +30,7 @@ class ReparacionInsumoController extends Controller
     public function index(): JsonResponse
     {
         $insumos = ReparacionInsumoService::getAll();
+
         return $this->successResponse(
             $insumos,
             $insumos->isEmpty() ? 'No se encontraron insumos de reparaciones' : 'Insumos de reparaciones obtenidos correctamente'
@@ -49,29 +50,31 @@ class ReparacionInsumoController extends Controller
      * -- INSERT INTO "reparaciones_insumos" (...) VALUES (...);
      * -- UPDATE "inventario" SET "cantidad_propia" = cantidad_propia - :cantidad WHERE "id_inventario" = :id;
      * -- UPDATE "reparaciones" SET "costo_insumos_base" = ... WHERE "id_reparacion" = :id_reparacion;
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'id_reparacion'                  => 'required|integer|exists:reparaciones,id_reparacion',
-            'id_inventario'                  => 'required|integer|exists:inventario,id_inventario',
-            'id_admin'                       => 'nullable|integer|exists:admins,id_admin',
-            'cantidad'                       => 'required|integer|min:1',
-            'costo_unitario'                 => 'nullable|numeric|min:0',
-            'monto_total_linea'              => 'nullable|numeric|min:0',
-            'costo_unitario_con_ganancia'    => 'nullable|numeric|min:0',
+            'id_reparacion' => 'required|integer|exists:reparaciones,id_reparacion',
+            'id_inventario' => 'required|integer|exists:inventario,id_inventario',
+            'id_admin' => 'nullable|integer|exists:admins,id_admin',
+            'cantidad' => 'required|integer|min:1',
+            'costo_unitario' => 'nullable|numeric|min:0',
+            'monto_total_linea' => 'nullable|numeric|min:0',
+            'costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
             'monto_total_linea_con_ganancia' => 'nullable|numeric|min:0',
-            'porcentaje_iva'                 => 'nullable|numeric|min:0',
-            'monto_iva'                      => 'nullable|numeric|min:0',
+            'porcentaje_iva' => 'nullable|numeric|min:0',
+            'monto_iva' => 'nullable|numeric|min:0',
         ]);
 
         $data = $request->all();
 
-        $insumo = ReparacionInsumoService::create($data);
-        if (!$insumo) {
+        try {
+            $insumo = ReparacionInsumoService::create($data);
+        } catch (\Throwable $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        }
+
+        if (! $insumo) {
             return $this->errorResponse('Insumo no creado', 404);
         }
 
@@ -90,13 +93,12 @@ class ReparacionInsumoController extends Controller
      * Consulta SQL ejecutada internamente vía Eloquent:
      * -- SELECT * FROM "reparaciones_insumos" WHERE "id_reparacion_insumo" = :id LIMIT 1;
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function show($id): JsonResponse
     {
         $insumo = ReparacionInsumoService::getOne($id);
-        if (!$insumo) {
+        if (! $insumo) {
             return $this->errorResponse('Insumo no encontrado', 404);
         }
 
@@ -116,38 +118,41 @@ class ReparacionInsumoController extends Controller
      * -- UPDATE "reparaciones_insumos" SET "cantidad" = :nueva_cant WHERE "id_reparacion_insumo" = :id;
      * -- UPDATE "inventario" SET "cantidad_propia" = cantidad_propia - :delta WHERE "id_inventario" = :id;
      *
-     * @param Request $request
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'cantidad'                       => 'integer|min:1',
-            'costo_unitario'                 => 'numeric|min:0',
-            'monto_total_linea'              => 'numeric|min:0',
-            'costo_unitario_con_ganancia'    => 'numeric|min:0',
+            'cantidad' => 'integer|min:1',
+            'costo_unitario' => 'numeric|min:0',
+            'monto_total_linea' => 'numeric|min:0',
+            'costo_unitario_con_ganancia' => 'numeric|min:0',
             'monto_total_linea_con_ganancia' => 'numeric|min:0',
-            'porcentaje_iva'                 => 'numeric|min:0',
-            'monto_iva'                      => 'numeric|min:0',
+            'porcentaje_iva' => 'numeric|min:0',
+            'monto_iva' => 'numeric|min:0',
         ]);
 
         if (
-            !$request->has('cantidad') &&
-            !$request->has('costo_unitario') &&
-            !$request->has('monto_total_linea') &&
-            !$request->has('costo_unitario_con_ganancia') &&
-            !$request->has('monto_total_linea_con_ganancia') &&
-            !$request->has('porcentaje_iva') &&
-            !$request->has('monto_iva')
+            ! $request->has('cantidad') &&
+            ! $request->has('costo_unitario') &&
+            ! $request->has('monto_total_linea') &&
+            ! $request->has('costo_unitario_con_ganancia') &&
+            ! $request->has('monto_total_linea_con_ganancia') &&
+            ! $request->has('porcentaje_iva') &&
+            ! $request->has('monto_iva')
         ) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);
         }
 
         $data = $request->all();
 
-        $insumo = ReparacionInsumoService::update($id, $data);
-        if (!$insumo) {
+        try {
+            $insumo = ReparacionInsumoService::update($id, $data);
+        } catch (\Throwable $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        }
+
+        if (! $insumo) {
             return $this->errorResponse('Insumo no encontrado', 404);
         }
 
@@ -169,13 +174,12 @@ class ReparacionInsumoController extends Controller
      * -- UPDATE "inventario" SET "cantidad_propia" = cantidad_propia + :cantidad WHERE "id_inventario" = :id;
      * -- UPDATE "reparaciones" SET "costo_insumos_base" = ... WHERE "id_reparacion" = :id_rep;
      *
-     * @param int|string $id
-     * @return JsonResponse
+     * @param  int|string  $id
      */
     public function destroy($id): JsonResponse
     {
         $insumo = ReparacionInsumoService::delete($id);
-        if (!$insumo) {
+        if (! $insumo) {
             return $this->errorResponse('Insumo no encontrado o no se pudo eliminar', 404);
         }
 
