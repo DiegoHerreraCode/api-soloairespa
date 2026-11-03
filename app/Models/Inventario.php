@@ -9,11 +9,11 @@ use App\Enums\InventarioCondicion;
 /**
  * Modelo Inventario
  * 
- * Representa el catálogo maestro y existencias de la empresa:
+ * Representa el catÃ¡logo maestro y existencias de la empresa:
  * - Equipos completos, repuestos (nuevos/usados) e insumos.
  * - Registra stocks consolidados (cantidad_total, cantidad_propia, cantidad_cliente).
- * - Mantiene métricas económicas históricas (_min, _prom, _max de compra, venta y reparación).
- * - Calcula el precio de venta unitario sugerido según el margen de ganancia.
+ * - Mantiene mÃ©tricas econÃ³micas histÃ³ricas (_min, _prom, _max de compra, venta y reparaciÃ³n).
+ * - Calcula el precio de venta unitario sugerido segÃºn el margen de ganancia.
  */
 class Inventario extends ApiModel
 {
@@ -54,7 +54,7 @@ class Inventario extends ApiModel
     ];
 
     /**
-     * Modelo y marca técnica a la que pertenece este ítem.
+     * Modelo y marca tÃ©cnica a la que pertenece este Ã­tem.
      * Consulta SQL Raw:
      * SELECT * FROM modelos WHERE id_modelo = inventario.id_modelo LIMIT 1;
      */
@@ -64,7 +64,7 @@ class Inventario extends ApiModel
     }
 
     /**
-     * Historial de compras donde se adquirió este ítem.
+     * Historial de compras donde se adquiriÃ³ este Ã­tem.
      * Consulta SQL Raw:
      * SELECT * FROM detalles_compras WHERE id_inventario = inventario.id_inventario;
      */
@@ -74,7 +74,7 @@ class Inventario extends ApiModel
     }
 
     /**
-     * Equipos físicos serializados asociados a este ítem.
+     * Equipos fÃ­sicos serializados asociados a este Ã­tem.
      * Consulta SQL Raw:
      * SELECT * FROM equipos WHERE id_inventario = inventario.id_inventario;
      */
@@ -84,12 +84,29 @@ class Inventario extends ApiModel
     }
 
     /**
-     * Repuestos físicos individuales (nuevos o usados) registrados bajo este ítem.
+     * Repuestos fÃ­sicos individuales (nuevos o usados) registrados bajo este Ã­tem.
      * Consulta SQL Raw:
      * SELECT * FROM repuestos WHERE id_inventario = inventario.id_inventario;
      */
     public function repuestos()
     {
         return $this->hasMany(Repuesto::class, 'id_inventario', 'id_inventario');
+    }
+
+    /**
+     * Homologaciones de cÃ³digos con proveedores.
+     */
+    public function inventarioProveedores()
+    {
+        return $this->hasMany(InventarioProveedor::class, 'id_inventario', 'id_inventario');
+    }
+
+    /**
+     * Proveedores que suministran este Ã­tem.
+     */
+    public function proveedores()
+    {
+        return $this->belongsToMany(Proveedor::class, 'inventario_proveedores', 'id_inventario', 'id_proveedor')
+            ->withPivot('id_inventario_proveedor', 'codigo_proveedor');
     }
 }

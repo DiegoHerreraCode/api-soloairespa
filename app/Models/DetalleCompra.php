@@ -7,8 +7,8 @@ use App\Models\ApiModel;
 /**
  * Modelo DetalleCompra
  * 
- * Cada Ìtem adquirido en una compra a proveedor.
- * Almacena cantidades, costos unitarios, desglose tributario y genera seriales si aplica.
+ * Cada √≠tem adquirido en una compra a proveedor.
+ * Almacena cantidades, costos unitarios, desglose tributario, c√≥digo del proveedor y genera seriales si aplica.
  */
 class DetalleCompra extends ApiModel
 {
@@ -21,6 +21,7 @@ class DetalleCompra extends ApiModel
     protected $fillable = [
         'id_compra',
         'id_inventario',
+        'codigo_proveedor',
         'cantidad',
         'costo_unitario',
         'monto_total_linea_sin_iva',
@@ -40,7 +41,7 @@ class DetalleCompra extends ApiModel
     }
 
     /**
-     * Registro maestro de inventario correspondiente a esta lÌnea.
+     * Registro maestro de inventario correspondiente a esta l√≠nea.
      * Consulta SQL Raw:
      * SELECT * FROM inventario WHERE id_inventario = detalles_compras.id_inventario LIMIT 1;
      */
@@ -50,7 +51,7 @@ class DetalleCompra extends ApiModel
     }
 
     /**
-     * Equipos fÌsicos serializados creados a partir de esta lÌnea de compra.
+     * Equipos f√≠sicos serializados creados a partir de esta l√≠nea de compra.
      * Consulta SQL Raw:
      * SELECT * FROM equipos WHERE id_detalle_compra = detalles_compras.id_detalle_compra;
      */
@@ -60,7 +61,7 @@ class DetalleCompra extends ApiModel
     }
 
     /**
-     * Repuestos nuevos serializados creados a partir de esta lÌnea de compra.
+     * Repuestos nuevos serializados creados a partir de esta l√≠nea de compra.
      * Consulta SQL Raw:
      * SELECT * FROM repuestos WHERE id_detalle_compra = detalles_compras.id_detalle_compra;
      */

@@ -16,6 +16,7 @@ use App\Http\Controllers\PagoClienteController;
 use App\Http\Controllers\PagoCompraController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\InventarioProveedorController;
 use App\Http\Controllers\ReparacionController;
 use App\Http\Controllers\ReparacionInsumoController;
 use App\Http\Controllers\ReparacionServicioTallerController;
@@ -70,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Capa 3
         'inventario' => InventarioController::class,
+        'inventario-proveedores' => InventarioProveedorController::class,
 
         // Capa 4
         'equipos' => EquipoController::class,

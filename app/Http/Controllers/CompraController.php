@@ -78,6 +78,7 @@ class CompraController extends Controller
             // Líneas de detalles
             'detalles' => 'required|array|min:1',
             'detalles.*.id_inventario' => 'required|integer|exists:inventario,id_inventario',
+            'detalles.*.codigo_proveedor' => 'nullable|string|max:100',
             'detalles.*.cantidad' => 'required|integer|min:1',
             'detalles.*.costo_unitario' => 'required|numeric',
             'detalles.*.monto_total_linea_sin_iva' => 'nullable|numeric',

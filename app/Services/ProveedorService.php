@@ -8,28 +8,28 @@ use Illuminate\Support\Facades\DB;
 /**
  * Service ProveedorService
  * 
- * Gestiona el catálogo de empresas proveedoras.
+ * Gestiona el catalogo de empresas proveedoras y sus productos asociados.
  */
 class ProveedorService
 {
     /**
-     * Retorna todos los proveedores registrados.
+     * Retorna todos los proveedores registrados con sus items homologados.
      * Consulta SQL Raw:
      * SELECT * FROM proveedores;
      */
     public static function getAll()
     {
-        return Proveedor::get();
+        return Proveedor::with(['inventarioProveedores'])->get();
     }
 
     /**
-     * Obtiene un proveedor por su ID.
+     * Obtiene un proveedor por su ID con sus items homologados.
      * Consulta SQL Raw:
      * SELECT * FROM proveedores WHERE id_proveedor = $id LIMIT 1;
      */
     public static function getOne($id)
     {
-        return Proveedor::find($id);
+        return Proveedor::with(['inventarioProveedores.inventario'])->find($id);
     }
 
     /**
@@ -46,7 +46,7 @@ class ProveedorService
     }
 
     /**
-     * Actualiza la información fiscal o de contacto de un proveedor.
+     * Actualiza la informacion fiscal o de contacto de un proveedor.
      * Consulta SQL Raw:
      * UPDATE proveedores SET nombre = ..., rut = ..., correo = ..., num_tlf = ..., direccion = ... WHERE id_proveedor = $id;
      */

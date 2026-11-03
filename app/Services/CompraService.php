@@ -131,6 +131,19 @@ class CompraService
                 $lineaData['id_compra'] = $compra->id_compra;
                 $detalle = DetalleCompra::create($lineaData);
 
+                // Registrar o actualizar homologacion en inventario_proveedores si viene codigo_proveedor
+                if (!empty($detalle->codigo_proveedor)) {
+                    \App\Models\InventarioProveedor::firstOrCreate(
+                        [
+                            'id_proveedor' => $compra->id_proveedor,
+                            'id_inventario' => $detalle->id_inventario,
+                        ],
+                        [
+                            'codigo_proveedor' => $detalle->codigo_proveedor,
+                        ]
+                    );
+                }
+
                 $item = Inventario::find($detalle->id_inventario);
                 if ($item) {
                     self::actualizarInventarioTrasCompra($item, $detalle->cantidad, (float) $detalle->costo_unitario);
