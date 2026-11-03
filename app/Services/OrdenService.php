@@ -438,10 +438,14 @@ class OrdenService
             // 2. REPUESTO ENTRANTE: registrar repuesto usado
             $idRepuestoEntranteCreado = null;
             if ($itemEntrante) {
+                $serviceTagEntrante = !empty($linea['service_tag_entrante'])
+                    ? trim($linea['service_tag_entrante'])
+                    : (($linea['nombre_entrante'] ?? ($itemEntrante->nombre.' (Recambio)')).'_'.now()->format('Ymd_His'));
+
                 $repEntrante = Repuesto::create([
                     'id_inventario' => $itemEntrante->id_inventario,
                     'serial' => $linea['serial_entrante'] ?? null,
-                    'service_tag' => ($linea['service_tag_entrante'] ?? $linea['nombre_entrante'] ?? ($itemEntrante->nombre.' (Recambio)')).'_'.now()->format('Ymd_His'),
+                    'service_tag' => $serviceTagEntrante,
                     'estado' => RepuestoEstado::PENDIENTE_REPARACION->value,
                     'propietario' => true,
                     'costo_adquisicion' => $montoTasacion,
@@ -525,7 +529,9 @@ class OrdenService
                     'cantidad_cliente' => (int) $item->cantidad_cliente + 1,
                 ]);
 
-                $serviceTagFinal = ($itemData['service_tag'] ?? ($itemData['nombre'] ?? ($item->nombre.' (Cliente)'))).'_'.now()->format('Ymd_His').'_'.($k + 1);
+                $serviceTagFinal = !empty($itemData['service_tag'])
+                    ? trim($itemData['service_tag'])
+                    : (($itemData['nombre'] ?? ($item->nombre.' (Cliente)')).'_'.now()->format('Ymd_His').'_'.($k + 1));
 
                 $repuestoCreado = Repuesto::create([
                     'id_inventario' => $item->id_inventario,

@@ -313,11 +313,15 @@ class CompraService
         } elseif (in_array($tipo, ['compresor', 'valvula'])) {
             for ($i = 0; $i < $detalle->cantidad; $i++) {
                 $serialData = $seriales[$i] ?? [];
+                $serviceTag = !empty($serialData['service_tag'])
+                    ? trim($serialData['service_tag'])
+                    : (($serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1))) . '_' . now()->format('Ymd_His') . '_' . ($i + 1));
+
                 Repuesto::create([
                     'id_inventario' => $item->id_inventario,
                     'id_detalle_compra' => $detalle->id_detalle_compra,
                     'serial' => $serialData['serial'] ?? null,
-                    'service_tag' => ($serialData['service_tag'] ?? $serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1))) . '_' . now()->format('Ymd_His') . '_' . ($i + 1),
+                    'service_tag' => $serviceTag,
                     'estado' => 'nuevo',
                     'propietario' => true,
                     'costo_adquisicion' => $detalle->costo_unitario,
