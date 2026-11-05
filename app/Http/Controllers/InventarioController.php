@@ -81,6 +81,10 @@ class InventarioController extends Controller
             'monto_venta_unitario' => 'nullable|numeric',
             'porcentaje_iva' => 'nullable|numeric',
             'porcentaje_ganancia' => 'nullable|numeric',
+            'proveedores' => 'nullable|array',
+            'proveedores.*.id_proveedor' => 'required|integer|exists:proveedores,id_proveedor',
+            'proveedores.*.codigo_proveedor' => 'required|string|max:100',
+            'proveedores.*.ultimo_monto_compra' => 'nullable|numeric|min:0',
         ]);
 
         $data = $request->all();
@@ -157,6 +161,10 @@ class InventarioController extends Controller
             'monto_venta_unitario' => 'numeric',
             'porcentaje_iva' => 'numeric',
             'porcentaje_ganancia' => 'numeric',
+            'proveedores' => 'nullable|array',
+            'proveedores.*.id_proveedor' => 'required|integer|exists:proveedores,id_proveedor',
+            'proveedores.*.codigo_proveedor' => 'required|string|max:100',
+            'proveedores.*.ultimo_monto_compra' => 'nullable|numeric|min:0',
         ]);
 
         // Validar que al menos un campo sea modificado
@@ -182,7 +190,8 @@ class InventarioController extends Controller
             !$request->has('ultimo_monto_compra') &&
             !$request->has('monto_venta_unitario') &&
             !$request->has('porcentaje_iva') &&
-            !$request->has('porcentaje_ganancia')
+            !$request->has('porcentaje_ganancia') &&
+            !$request->has('proveedores')
         ) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);
         }

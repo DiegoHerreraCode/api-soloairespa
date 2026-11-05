@@ -68,14 +68,22 @@ class InventarioService
     {
         DB::beginTransaction();
 
+        $proveedoresData = $data['proveedores'] ?? null;
+        unset($data['proveedores']);
+
         // Consulta SQL Raw equivalente:
         // INSERT INTO "inventario" ("id_inventario", "sku", "nombre", "tipo", "condicion", "cantidad_total", "cantidad_propia", "cantidad_cliente", "stock_minimo", "porcentaje_ganancia", "created_at", "updated_at") VALUES (...);
         $item = Inventario::create($data);
 
+        // Guardar asociaciones con proveedores si fueron enviadas
+        if (is_array($proveedoresData)) {
+            self::sincronizarProveedores($item->id_inventario, $proveedoresData);
+        }
+
         DB::commit();
         self::verificarYNotificarStockBajo($item);
 
-        return $item;
+        return $item->load(['modelo.marca', 'inventarioProveedores.proveedor']);
     }
 
     /**
@@ -96,14 +104,65 @@ class InventarioService
 
         DB::beginTransaction();
 
+        $proveedoresData = $data['proveedores'] ?? null;
+        unset($data['proveedores']);
+
         // Consulta SQL Raw equivalente:
         // UPDATE "inventario" SET "nombre" = :nombre, "stock_minimo" = :stock, "porcentaje_ganancia" = :ganancia, "updated_at" = NOW() WHERE "id_inventario" = :id;
         $item->update($data);
 
+        // Sincronizar asociaciones con proveedores si se enviaron
+        if (is_array($proveedoresData)) {
+            self::sincronizarProveedores($item->id_inventario, $proveedoresData);
+        }
+
         DB::commit();
         self::verificarYNotificarStockBajo($item);
 
-        return $item;
+        return $item->load(['modelo.marca', 'inventarioProveedores.proveedor']);
+    }
+
+    /**
+     * Sincroniza las relaciones inventario_proveedores para un ítem.
+     */
+    protected static function sincronizarProveedores($idInventario, array $proveedoresData)
+    {
+        $proveedoresIdsMantener = [];
+
+        foreach ($proveedoresData as $pData) {
+            $idProv = $pData['id_proveedor'] ?? null;
+            $codProv = trim($pData['codigo_proveedor'] ?? '');
+            $monto = isset($pData['ultimo_monto_compra']) ? (float) $pData['ultimo_monto_compra'] : 0.00;
+
+            if (!$idProv || empty($codProv)) {
+                continue;
+            }
+
+            $proveedoresIdsMantener[] = $idProv;
+
+            $invProv = \App\Models\InventarioProveedor::where('id_inventario', $idInventario)
+                ->where('id_proveedor', $idProv)
+                ->first();
+
+            if ($invProv) {
+                $invProv->update([
+                    'codigo_proveedor' => $codProv,
+                    'ultimo_monto_compra' => $monto,
+                ]);
+            } else {
+                \App\Models\InventarioProveedor::create([
+                    'id_inventario' => $idInventario,
+                    'id_proveedor' => $idProv,
+                    'codigo_proveedor' => $codProv,
+                    'ultimo_monto_compra' => $monto,
+                ]);
+            }
+        }
+
+        // Eliminar homologaciones que fueron removidas de la lista si se pasó un array definido
+        \App\Models\InventarioProveedor::where('id_inventario', $idInventario)
+            ->whereNotIn('id_proveedor', $proveedoresIdsMantener)
+            ->delete();
     }
 
     /**
