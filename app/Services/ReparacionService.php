@@ -39,7 +39,7 @@ class ReparacionService
      */
     public static function getAll()
     {
-        return Reparacion::with('insumos', 'serviciosTaller', 'repuesto')->get();
+        return Reparacion::with(['insumos', 'serviciosTaller', 'repuesto', 'orden.cliente'])->get();
     }
 
     /**
@@ -49,7 +49,7 @@ class ReparacionService
      */
     public static function getOne($id)
     {
-        return Reparacion::find($id);
+        return Reparacion::with(['insumos.inventario', 'serviciosTaller.servicioTaller', 'repuesto', 'orden.cliente', 'adminInicio', 'adminFin'])->find($id);
     }
 
     /**
