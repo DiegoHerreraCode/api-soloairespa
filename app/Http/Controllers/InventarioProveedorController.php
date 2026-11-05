@@ -50,24 +50,27 @@ class InventarioProveedorController extends Controller
             'id_proveedor' => 'required|integer|exists:proveedores,id_proveedor',
             'id_inventario' => 'required|integer|exists:inventario,id_inventario',
             'codigo_proveedor' => 'required|string|max:100',
+            'ultimo_monto_compra' => 'nullable|numeric|min:0',
         ]);
 
         $item = InventarioProveedor::create([
             'id_proveedor' => $request->id_proveedor,
             'id_inventario' => $request->id_inventario,
             'codigo_proveedor' => trim($request->codigo_proveedor),
+            'ultimo_monto_compra' => $request->filled('ultimo_monto_compra') ? (float) $request->ultimo_monto_compra : 0.00,
         ]);
 
         return $this->successResponse($item->load(['proveedor', 'inventario']), 'Homologación registrada correctamente', 201);
     }
 
     /**
-     * Actualiza el código de proveedor de un ítem existente.
+     * Actualiza el código de proveedor y/o último monto de compra de un ítem existente.
      */
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'codigo_proveedor' => 'required|string|max:100',
+            'codigo_proveedor' => 'sometimes|required|string|max:100',
+            'ultimo_monto_compra' => 'nullable|numeric|min:0',
         ]);
 
         $item = InventarioProveedor::find($id);
@@ -75,9 +78,15 @@ class InventarioProveedorController extends Controller
             return $this->errorResponse('Relación no encontrada', 404);
         }
 
-        $item->update([
-            'codigo_proveedor' => trim($request->codigo_proveedor),
-        ]);
+        $dataToUpdate = [];
+        if ($request->has('codigo_proveedor')) {
+            $dataToUpdate['codigo_proveedor'] = trim($request->codigo_proveedor);
+        }
+        if ($request->has('ultimo_monto_compra')) {
+            $dataToUpdate['ultimo_monto_compra'] = $request->filled('ultimo_monto_compra') ? (float) $request->ultimo_monto_compra : 0.00;
+        }
+
+        $item->update($dataToUpdate);
 
         return $this->successResponse($item->load(['proveedor', 'inventario']), 'Código de proveedor actualizado correctamente');
     }

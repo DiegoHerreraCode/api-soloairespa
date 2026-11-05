@@ -40,7 +40,7 @@ class InventarioService
         // SELECT * FROM "inventario";
         // SELECT * FROM "modelos" WHERE "id_modelo" IN (...);
         // SELECT * FROM "marcas" WHERE "id_marca" IN (...);
-        return Inventario::with(['modelo.marca', 'inventarioProveedores'])->get();
+        return Inventario::with(['modelo.marca', 'inventarioProveedores.proveedor'])->get();
     }
 
     /**
@@ -55,7 +55,7 @@ class InventarioService
         // SELECT * FROM "inventario" WHERE "id_inventario" = :id LIMIT 1;
         // SELECT * FROM "modelos" WHERE "id_modelo" = :id_modelo LIMIT 1;
         // SELECT * FROM "marcas" WHERE "id_marca" = :id_marca LIMIT 1;
-        return Inventario::with(['modelo.marca', 'inventarioProveedores'])->find($id);
+        return Inventario::with(['modelo.marca', 'inventarioProveedores.proveedor'])->find($id);
     }
 
     /**

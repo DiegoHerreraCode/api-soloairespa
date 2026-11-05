@@ -23,6 +23,11 @@ class InventarioProveedor extends ApiModel
         'id_proveedor',
         'id_inventario',
         'codigo_proveedor',
+        'ultimo_monto_compra',
+    ];
+
+    protected $casts = [
+        'ultimo_monto_compra' => 'float',
     ];
 
     /**

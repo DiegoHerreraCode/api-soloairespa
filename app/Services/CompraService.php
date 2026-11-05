@@ -131,17 +131,26 @@ class CompraService
                 $lineaData['id_compra'] = $compra->id_compra;
                 $detalle = DetalleCompra::create($lineaData);
 
-                // Registrar o actualizar homologacion en inventario_proveedores si viene codigo_proveedor
-                if (!empty($detalle->codigo_proveedor)) {
-                    \App\Models\InventarioProveedor::firstOrCreate(
-                        [
-                            'id_proveedor' => $compra->id_proveedor,
-                            'id_inventario' => $detalle->id_inventario,
-                        ],
-                        [
-                            'codigo_proveedor' => $detalle->codigo_proveedor,
-                        ]
-                    );
+                // Registrar o actualizar homologacion en inventario_proveedores y actualizar ultimo_monto_compra
+                $invProv = \App\Models\InventarioProveedor::where('id_proveedor', $compra->id_proveedor)
+                    ->where('id_inventario', $detalle->id_inventario)
+                    ->first();
+
+                if ($invProv) {
+                    $updatePayload = [
+                        'ultimo_monto_compra' => (float) $detalle->costo_unitario,
+                    ];
+                    if (!empty($detalle->codigo_proveedor)) {
+                        $updatePayload['codigo_proveedor'] = $detalle->codigo_proveedor;
+                    }
+                    $invProv->update($updatePayload);
+                } else if (!empty($detalle->codigo_proveedor)) {
+                    \App\Models\InventarioProveedor::create([
+                        'id_proveedor' => $compra->id_proveedor,
+                        'id_inventario' => $detalle->id_inventario,
+                        'codigo_proveedor' => $detalle->codigo_proveedor,
+                        'ultimo_monto_compra' => (float) $detalle->costo_unitario,
+                    ]);
                 }
 
                 $item = Inventario::find($detalle->id_inventario);
