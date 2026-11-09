@@ -60,6 +60,10 @@ class ProveedorController extends Controller
             'correo' => 'required|email|max:100|unique:proveedores,correo',
             'num_tlf' => 'required|string|max:100|unique:proveedores,num_tlf',
             'direccion' => 'required|string|max:100',
+            'items' => 'nullable|array',
+            'items.*.id_inventario' => 'required|integer|exists:inventario,id_inventario',
+            'items.*.codigo_proveedor' => 'required|string|max:100',
+            'items.*.ultimo_monto_compra' => 'nullable|numeric|min:0',
         ]);
 
         $proveedor = ProveedorService::create($request->all());
@@ -118,10 +122,14 @@ class ProveedorController extends Controller
             'correo' => "email|max:100|unique:proveedores,correo,{$id},id_proveedor",
             'num_tlf' => "string|max:100|unique:proveedores,num_tlf,{$id},id_proveedor",
             'direccion' => 'string|max:100',
+            'items' => 'nullable|array',
+            'items.*.id_inventario' => 'required|integer|exists:inventario,id_inventario',
+            'items.*.codigo_proveedor' => 'required|string|max:100',
+            'items.*.ultimo_monto_compra' => 'nullable|numeric|min:0',
         ]);
 
         // Validar que al menos un campo sea modificado
-        if (!$request->has('nombre') && !$request->has('rut') && !$request->has('correo') && !$request->has('num_tlf') && !$request->has('direccion')) {
+        if (!$request->has('nombre') && !$request->has('rut') && !$request->has('correo') && !$request->has('num_tlf') && !$request->has('direccion') && !$request->has('items')) {
             return $this->errorResponse('Al menos un campo debe ser modificado', 400);
         }
 

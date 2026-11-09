@@ -40,9 +40,18 @@ class ProveedorService
     public static function create($data)
     {
         DB::beginTransaction();
+
+        $itemsData = $data['items'] ?? null;
+        unset($data['items']);
+
         $proveedor = Proveedor::create($data);
+
+        if (is_array($itemsData)) {
+            self::sincronizarItems($proveedor->id_proveedor, $itemsData);
+        }
+
         DB::commit();
-        return $proveedor;
+        return $proveedor->load('inventarioProveedores.inventario');
     }
 
     /**
@@ -58,9 +67,61 @@ class ProveedorService
         }
 
         DB::beginTransaction();
+
+        $itemsData = $data['items'] ?? null;
+        unset($data['items']);
+
         $proveedor->update($data);
+
+        if (is_array($itemsData)) {
+            self::sincronizarItems($proveedor->id_proveedor, $itemsData);
+        }
+
         DB::commit();
-        return $proveedor;
+        return $proveedor->load('inventarioProveedores.inventario');
+    }
+
+    /**
+     * Sincroniza las relaciones inventario_proveedores para un proveedor.
+     */
+    protected static function sincronizarItems($idProveedor, array $itemsData)
+    {
+        $inventarioIdsMantener = [];
+
+        foreach ($itemsData as $iData) {
+            $idInv = $iData['id_inventario'] ?? null;
+            $codProv = trim($iData['codigo_proveedor'] ?? '');
+            $monto = isset($iData['ultimo_monto_compra']) ? (float) $iData['ultimo_monto_compra'] : 0.00;
+
+            if (!$idInv || empty($codProv)) {
+                continue;
+            }
+
+            $inventarioIdsMantener[] = $idInv;
+
+            $invProv = \App\Models\InventarioProveedor::where('id_proveedor', $idProveedor)
+                ->where('id_inventario', $idInv)
+                ->first();
+
+            if ($invProv) {
+                $invProv->update([
+                    'codigo_proveedor' => $codProv,
+                    'ultimo_monto_compra' => $monto,
+                ]);
+            } else {
+                \App\Models\InventarioProveedor::create([
+                    'id_proveedor' => $idProveedor,
+                    'id_inventario' => $idInv,
+                    'codigo_proveedor' => $codProv,
+                    'ultimo_monto_compra' => $monto,
+                ]);
+            }
+        }
+
+        // Eliminar homologaciones que fueron removidas de la lista si se pasó un array definido
+        \App\Models\InventarioProveedor::where('id_proveedor', $idProveedor)
+            ->whereNotIn('id_inventario', $inventarioIdsMantener)
+            ->delete();
     }
 
     /**
