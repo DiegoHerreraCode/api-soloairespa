@@ -421,19 +421,22 @@ class OrdenService
             // 1. REPUESTO SALIENTE: identificar, descontar stock propio y actualizar m�tricas
             $idRepuestoSaliente = $linea['id_repuesto_saliente'] ?? null;
             if (! $idRepuestoSaliente && ! empty($linea['id_inventario_repuesto_saliente'])) {
-                // Consulta SQL Raw equivalente:
-                // SELECT * FROM "repuestos"
-                // WHERE "id_inventario" = :id_inventario
-                //   AND "id_orden_salida" IS NULL
-                //   AND "propietario" = true
-                // LIMIT 1;
+                // Selección automática de pieza física en recambio:
+                // repuesto perteneciente al taller (propietario = true), sin orden de salida,
+                // con estado 'reparado', ordenado ascendentemente por id_repuesto (FIFO)
                 $repDisponible = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
                     ->whereNull('id_orden_salida')
                     ->where('propietario', true)
+                    ->where('estado', 'reparado')
+                    ->orderBy('id_repuesto', 'asc')
                     ->first();
-                if ($repDisponible) {
-                    $idRepuestoSaliente = $repDisponible->id_repuesto;
+
+                if (! $repDisponible) {
+                    $nombreSaliente = $itemSaliente ? $itemSaliente->nombre : "Ítem #{$linea['id_inventario_repuesto_saliente']}";
+                    throw new \Exception("No hay repuestos reparados disponibles en bodega para entregar en recambio del ítem '{$nombreSaliente}'.");
                 }
+
+                $idRepuestoSaliente = $repDisponible->id_repuesto;
             }
 
             if ($idRepuestoSaliente) {
@@ -448,9 +451,11 @@ class OrdenService
             // 2. REPUESTO ENTRANTE: registrar repuesto usado
             $idRepuestoEntranteCreado = null;
             if ($itemEntrante) {
-                $serviceTagEntrante = !empty($linea['service_tag_entrante'])
-                    ? trim($linea['service_tag_entrante'])
-                    : (($linea['nombre_entrante'] ?? ($itemEntrante->nombre.' (Recambio)')).'_'.now()->format('Ymd_His'));
+                $serviceTagEntrante = !empty($linea['service_tag'])
+                    ? trim($linea['service_tag'])
+                    : (!empty($linea['service_tag_entrante'])
+                        ? trim($linea['service_tag_entrante'])
+                        : (($linea['nombre_entrante'] ?? ($itemEntrante->nombre.' (Recambio)')).'_'.now()->format('Ymd_His')));
 
                 $repEntrante = Repuesto::create([
                     'id_inventario' => $itemEntrante->id_inventario,
