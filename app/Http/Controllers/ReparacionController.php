@@ -78,6 +78,7 @@ class ReparacionController extends Controller
             'costo_total' => 'nullable|numeric|min:0',
             'costo_total_con_ganancia' => 'nullable|numeric|min:0',
             'monto_total_iva' => 'nullable|numeric|min:0',
+            'observaciones' => 'nullable|string|max:10000',
 
             // Arreglo opcional de insumos (para sincronización unificada o cotización extra)
             'insumos' => 'nullable|array',
@@ -188,6 +189,7 @@ class ReparacionController extends Controller
             'costo_total' => 'numeric|min:0',
             'costo_total_con_ganancia' => 'numeric|min:0',
             'monto_total_iva' => 'numeric|min:0',
+            'observaciones' => 'nullable|string|max:10000',
 
             // Arreglo opcional de insumos (para sincronización unificada)
             'insumos' => 'nullable|array',
@@ -229,6 +231,7 @@ class ReparacionController extends Controller
                 'costo_total',
                 'costo_total_con_ganancia',
                 'monto_total_iva',
+                'observaciones',
                 'insumos',
                 'servicios',
                 'insumos_devueltos',

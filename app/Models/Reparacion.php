@@ -8,7 +8,7 @@ use App\Enums\ReparacionEstado;
 /**
  * Modelo Reparacion
  * 
- * Gestiona el proceso tÈcnico de reacondicionamiento o reparaciÛn de una pieza fÌsica (repuesto).
+ * Gestiona el proceso t√©cnico de reacondicionamiento o reparaci√≥n de una pieza f√≠sica (repuesto).
  * Acumula costos directos de mano de obra (servicios de taller) e insumos gastados,
  * calculando el costo total base y el valor comercial con margen de ganancia e IVA.
  */
@@ -35,6 +35,7 @@ class Reparacion extends ApiModel
         'costo_total',
         'costo_total_con_ganancia',
         'monto_total_iva',
+        'observaciones',
     ];
 
     protected $casts = [
@@ -42,7 +43,7 @@ class Reparacion extends ApiModel
     ];
 
     /**
-     * Pieza fÌsica que se repara.
+     * Pieza f√≠sica que se repara.
      * Consulta SQL Raw:
      * SELECT * FROM repuestos WHERE id_repuesto = reparaciones.id_repuesto LIMIT 1;
      */
@@ -52,7 +53,7 @@ class Reparacion extends ApiModel
     }
 
     /**
-     * Orden de trabajo a la que est· vinculada la reparaciÛn (si proviene de una orden de cliente).
+     * Orden de trabajo a la que est√° vinculada la reparaci√≥n (si proviene de una orden de cliente).
      * Consulta SQL Raw:
      * SELECT * FROM ordenes WHERE id_orden = reparaciones.id_orden LIMIT 1;
      */
@@ -62,7 +63,7 @@ class Reparacion extends ApiModel
     }
 
     /**
-     * Administrador que dio inicio al proceso de reparaciÛn.
+     * Administrador que dio inicio al proceso de reparaci√≥n.
      * Consulta SQL Raw:
      * SELECT * FROM admins WHERE id_admin = reparaciones.id_admin_fecha_inicio LIMIT 1;
      */
@@ -72,7 +73,7 @@ class Reparacion extends ApiModel
     }
 
     /**
-     * Administrador que marcÛ la finalizaciÛn de la reparaciÛn.
+     * Administrador que marc√≥ la finalizaci√≥n de la reparaci√≥n.
      * Consulta SQL Raw:
      * SELECT * FROM admins WHERE id_admin = reparaciones.id_admin_fecha_fin LIMIT 1;
      */
@@ -82,7 +83,7 @@ class Reparacion extends ApiModel
     }
 
     /**
-     * Materiales e insumos consumidos durante esta reparaciÛn.
+     * Materiales e insumos consumidos durante esta reparaci√≥n.
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones_insumos WHERE id_reparacion = reparaciones.id_reparacion;
      */
@@ -92,7 +93,7 @@ class Reparacion extends ApiModel
     }
 
     /**
-     * Servicios y tareas de taller ejecutadas durante esta reparaciÛn.
+     * Servicios y tareas de taller ejecutadas durante esta reparaci√≥n.
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones_servicios_taller WHERE id_reparacion = reparaciones.id_reparacion;
      */
