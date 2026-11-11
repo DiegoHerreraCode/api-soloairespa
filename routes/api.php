@@ -52,6 +52,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Endpoint especifico para generar archivo excel
     Route::get('/inventario/export/excel', [InventarioController::class, 'exportExcel']);
+    Route::get('/inventario/{id}/reparacion-base', [\App\Http\Controllers\InventarioReparacionBaseController::class, 'show']);
+    Route::post('/inventario/{id}/reparacion-base', [\App\Http\Controllers\InventarioReparacionBaseController::class, 'sync']);
 
     Route::apiResources([
         // Capa 1

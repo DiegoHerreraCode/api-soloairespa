@@ -134,7 +134,7 @@ class OrdenService
         } elseif ($nombreTipo === 'recambio') {
             $inventariosAfectadosIds = self::procesarRecambio($orden, $detalles);
         } elseif ($nombreTipo === 'reparacion') {
-            self::procesarRecepcionReparacion($orden, $repuestosEntrantes);
+            $inventariosAfectadosIds = self::procesarRecepcionReparacion($orden, $repuestosEntrantes);
         }
 
         DB::commit();
@@ -534,11 +534,51 @@ class OrdenService
      * UPDATE inventario SET cantidad_total = cantidad_total + 1, cantidad_cliente = cantidad_cliente + 1 WHERE id_inventario = ...;
      * INSERT INTO repuestos (id_inventario, serial, service_tag, estado, propietario, costo_adquisicion, id_orden_entrada) VALUES (...);
      */
-    public static function procesarRecepcionReparacion(Orden $orden, array $repuestosEntrantes)
+    /**
+     * Procesa Recepción de Reparación directa:
+     * - Valida stock acumulado de insumos requeridos en todas las reparaciones de la orden.
+     * - Entra repuesto del cliente (propietario = false, estado = 'pendiente_reparacion').
+     * - En inventario suma cantidad_total y cantidad_cliente.
+     * - Crea la ficha de reparación con sus insumos y servicios base o personalizados.
+     * - Crea las líneas en detalles_ordenes y calcula los totales económicos de la orden de inmediato.
+     */
+    public static function procesarRecepcionReparacion(Orden $orden, array $repuestosEntrantes): array
     {
+        // 1. Validar disponibilidad global de stock para todos los insumos solicitados en las reparaciones
+        $demandaInsumos = [];
+        foreach ($repuestosEntrantes as $itemData) {
+            $insumosList = $itemData['insumos'] ?? [];
+            foreach ($insumosList as $insumoReq) {
+                $idInsumo = (int) ($insumoReq['id_inventario'] ?? 0);
+                $cant = (int) ($insumoReq['cantidad'] ?? 0);
+                if ($idInsumo > 0 && $cant > 0) {
+                    $demandaInsumos[$idInsumo] = ($demandaInsumos[$idInsumo] ?? 0) + $cant;
+                }
+            }
+        }
+
+        foreach ($demandaInsumos as $idInsumo => $cantRequerida) {
+            $insumoInv = Inventario::find($idInsumo);
+            if (! $insumoInv) {
+                throw new \Exception("Insumo con ID #{$idInsumo} no encontrado.");
+            }
+            $stockDisponible = (int) $insumoInv->cantidad_propia;
+            if ($cantRequerida > $stockDisponible) {
+                throw new \Exception("Stock insuficiente para el insumo '{$insumoInv->nombre}'. Solicitado en total: {$cantRequerida}, Disponible en taller: {$stockDisponible}.");
+            }
+        }
+
+        $userId = auth()->id();
+        $admin = $userId ? Admin::where('id_user', $userId)->first() : null;
+        $idAdmin = $admin ? $admin->id_admin : 1;
+
+        $inventariosAfectados = [];
+
         foreach ($repuestosEntrantes as $k => $itemData) {
             $item = Inventario::find($itemData['id_inventario']);
             if ($item) {
+                $inventariosAfectados[] = $item->id_inventario;
+
                 $item->update([
                     'cantidad_total' => (int) $item->cantidad_total + 1,
                     'cantidad_cliente' => (int) $item->cantidad_cliente + 1,
@@ -559,7 +599,7 @@ class OrdenService
                 ]);
 
                 // Crear automáticamente la ficha en 'reparaciones' para esta pieza
-                Reparacion::firstOrCreate(
+                $reparacion = Reparacion::firstOrCreate(
                     ['id_repuesto' => $repuestoCreado->id_repuesto],
                     [
                         'id_orden' => $orden->id_orden,
@@ -570,8 +610,145 @@ class OrdenService
                         'id_admin_fecha_fin' => null,
                     ]
                 );
+
+                // Cargar insumos asociados si fueron enviados
+                if (! empty($itemData['insumos']) && is_array($itemData['insumos'])) {
+                    foreach ($itemData['insumos'] as $insumoData) {
+                        $insumoData['id_reparacion'] = $reparacion->id_reparacion;
+                        $insumoData['id_admin'] = $idAdmin;
+                        ReparacionService::registrarInsumo($insumoData);
+                        $inventariosAfectados[] = (int) $insumoData['id_inventario'];
+                    }
+                }
+
+                // Cargar servicios asociados si fueron enviados
+                if (! empty($itemData['servicios']) && is_array($itemData['servicios'])) {
+                    foreach ($itemData['servicios'] as $servicioData) {
+                        $servicioData['id_reparacion'] = $reparacion->id_reparacion;
+                        $servicioData['id_admin'] = $idAdmin;
+                        if (empty($servicioData['estado'])) {
+                            $servicioData['estado'] = \App\Enums\TallerEstado::PENDIENTE_ASIGNACION->value;
+                        }
+                        ReparacionService::registrarServicio($servicioData);
+                    }
+                }
+
+                // Recalcular costos consolidados de la ficha de reparación
+                ReparacionService::recalcularCostosReparacion($reparacion->id_reparacion);
+
+                // Crear registro en detalles_ordenes de inmediato para esta reparación
+                $reparacion->refresh();
+                $subtotalLinea = (float) ($reparacion->costo_total_con_ganancia ?? 0.00);
+                $ivaLinea = (float) ($reparacion->monto_total_iva ?? 0.00);
+                $totalLinea = $subtotalLinea + $ivaLinea;
+
+                $porcentajeIva = 0.00;
+                if ($subtotalLinea > 0 && $ivaLinea > 0) {
+                    $porcentajeIva = (float) ($item->porcentaje_iva ?? round(($ivaLinea / $subtotalLinea) * 100, 2));
+                }
+
+                DetalleOrden::create([
+                    'id_orden' => $orden->id_orden,
+                    'id_inventario_insumo_saliente' => null,
+                    'id_inventario_repuesto_saliente' => $repuestoCreado->id_inventario,
+                    'id_repuesto_saliente' => $repuestoCreado->id_repuesto,
+                    'id_inventario_repuesto_entrante' => null,
+                    'id_repuesto_entrante' => null,
+                    'cantidad' => 1,
+                    'precio_unitario' => $subtotalLinea,
+                    'monto_tasacion' => 0.00,
+                    'monto_total_linea_sin_iva' => $subtotalLinea,
+                    'porcentaje_iva' => $porcentajeIva,
+                    'monto_iva' => $ivaLinea,
+                    'monto_total_linea_con_iva' => $totalLinea,
+                ]);
             }
         }
+
+        // Recalcular totales económicos consolidados de la orden
+        self::recalcularOrdenDesdeReparaciones($orden->id_orden);
+
+        return array_values(array_unique($inventariosAfectados));
+    }
+
+    /**
+     * Recalcula los detalles_ordenes y montos totales de una orden de reparación
+     * a partir del estado actual de sus reparaciones asociadas.
+     */
+    public static function recalcularOrdenDesdeReparaciones(int $idOrden): void
+    {
+        $orden = Orden::find($idOrden);
+        if (! $orden) {
+            return;
+        }
+
+        $reparaciones = Reparacion::where('id_orden', $idOrden)->get();
+
+        $totalGravado = 0.00;
+        $totalExento = 0.00;
+        $totalIva = 0.00;
+        $totalNeto = 0.00;
+
+        foreach ($reparaciones as $rep) {
+            $repuesto = Repuesto::find($rep->id_repuesto);
+            $itemInventario = $repuesto ? Inventario::find($repuesto->id_inventario) : null;
+
+            $subtotalLinea = (float) ($rep->costo_total_con_ganancia ?? 0.00);
+            $ivaLinea = (float) ($rep->monto_total_iva ?? 0.00);
+            $totalLinea = $subtotalLinea + $ivaLinea;
+
+            $porcentajeIva = 0.00;
+            if ($subtotalLinea > 0 && $ivaLinea > 0) {
+                $porcentajeIva = (float) ($itemInventario->porcentaje_iva ?? round(($ivaLinea / $subtotalLinea) * 100, 2));
+            }
+
+            // Buscar detalle de orden asociado a este repuesto
+            $detalle = DetalleOrden::where('id_orden', $idOrden)
+                ->where('id_repuesto_saliente', $rep->id_repuesto)
+                ->first();
+
+            if ($detalle) {
+                $detalle->update([
+                    'precio_unitario' => $subtotalLinea,
+                    'monto_total_linea_sin_iva' => $subtotalLinea,
+                    'porcentaje_iva' => $porcentajeIva,
+                    'monto_iva' => $ivaLinea,
+                    'monto_total_linea_con_iva' => $totalLinea,
+                ]);
+            } else {
+                DetalleOrden::create([
+                    'id_orden' => $idOrden,
+                    'id_inventario_insumo_saliente' => null,
+                    'id_inventario_repuesto_saliente' => $repuesto ? $repuesto->id_inventario : null,
+                    'id_repuesto_saliente' => $repuesto ? $repuesto->id_repuesto : null,
+                    'id_inventario_repuesto_entrante' => null,
+                    'id_repuesto_entrante' => null,
+                    'cantidad' => 1,
+                    'precio_unitario' => $subtotalLinea,
+                    'monto_tasacion' => 0.00,
+                    'monto_total_linea_sin_iva' => $subtotalLinea,
+                    'porcentaje_iva' => $porcentajeIva,
+                    'monto_iva' => $ivaLinea,
+                    'monto_total_linea_con_iva' => $totalLinea,
+                ]);
+            }
+
+            if ($porcentajeIva > 0) {
+                $totalGravado += $subtotalLinea;
+            } else {
+                $totalExento += $subtotalLinea;
+            }
+            $totalIva += $ivaLinea;
+            $totalNeto += $totalLinea;
+        }
+
+        $orden->update([
+            'monto_total_gravado' => round($totalGravado, 2),
+            'monto_total_exento' => round($totalExento, 2),
+            'monto_total_iva' => round($totalIva, 2),
+            'monto_total' => round($totalNeto, 2),
+            'monto_pendiente' => round($totalNeto, 2),
+        ]);
     }
 
     /**

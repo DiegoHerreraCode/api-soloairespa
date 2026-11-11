@@ -55,6 +55,11 @@ class ReparacionInsumoService
         // Recalcular costos consolidados de la reparacin
         ReparacionService::recalcularCostosReparacion($insumo->id_reparacion);
 
+        $rep = \App\Models\Reparacion::find($insumo->id_reparacion);
+        if ($rep && ! empty($rep->id_orden)) {
+            OrdenService::recalcularOrdenDesdeReparaciones($rep->id_orden);
+        }
+
         DB::commit();
 
         return $insumo;
@@ -111,8 +116,12 @@ class ReparacionInsumoService
 
         $insumo->update($data);
 
-        // Recalcular costos de la reparaci�n
         ReparacionService::recalcularCostosReparacion($insumo->id_reparacion);
+
+        $rep = \App\Models\Reparacion::find($insumo->id_reparacion);
+        if ($rep && ! empty($rep->id_orden)) {
+            OrdenService::recalcularOrdenDesdeReparaciones($rep->id_orden);
+        }
 
         DB::commit();
 
@@ -147,8 +156,12 @@ class ReparacionInsumoService
 
         $insumo->delete();
 
-        // Recalcular costos consolidados de la reparaci�n
         ReparacionService::recalcularCostosReparacion($idReparacion);
+
+        $rep = \App\Models\Reparacion::find($idReparacion);
+        if ($rep && ! empty($rep->id_orden)) {
+            OrdenService::recalcularOrdenDesdeReparaciones($rep->id_orden);
+        }
 
         DB::commit();
 

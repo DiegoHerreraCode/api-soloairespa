@@ -109,7 +109,13 @@ class InventarioService
 
         // Consulta SQL Raw equivalente:
         // UPDATE "inventario" SET "nombre" = :nombre, "stock_minimo" = :stock, "porcentaje_ganancia" = :ganancia, "updated_at" = NOW() WHERE "id_inventario" = :id;
+        $precioAnterior = (float) $item->monto_venta_unitario;
         $item->update($data);
+
+        // Si cambió el precio de venta unitario, recalcular ítems que usen este insumo en reparación base
+        if (round($precioAnterior, 2) !== round((float) $item->monto_venta_unitario, 2)) {
+            self::recalcularItemsPorCambioInsumo($item->id_inventario);
+        }
 
         // Sincronizar asociaciones con proveedores si se enviaron
         if (is_array($proveedoresData)) {
@@ -650,5 +656,62 @@ class InventarioService
         }
 
         return $itemsCriticos->count();
+    }
+
+    /**
+     * Calcula el monto_venta_reparacion_base de un ítem a partir de sus insumos y servicios base.
+     */
+    public static function calcularMontoVentaReparacionBase($idInventario): float
+    {
+        $insumosBase = \App\Models\InventarioReparacionInsumo::with('insumo')->where('id_inventario', $idInventario)->get();
+        $serviciosBase = \App\Models\InventarioReparacionServicio::with('servicioTaller')->where('id_inventario', $idInventario)->get();
+
+        if ($insumosBase->isEmpty() && $serviciosBase->isEmpty()) {
+            return 0.00;
+        }
+
+        $totalInsumos = 0.00;
+        foreach ($insumosBase as $ib) {
+            $pu = $ib->insumo ? (float) $ib->insumo->monto_venta_unitario : 0.00;
+            $totalInsumos += (int) $ib->cantidad * $pu;
+        }
+
+        $totalServicios = 0.00;
+        foreach ($serviciosBase as $sb) {
+            $pu = $sb->servicioTaller ? (float) $sb->servicioTaller->monto_venta_unitario : 0.00;
+            $totalServicios += (int) $sb->cantidad * $pu;
+        }
+
+        return round($totalInsumos + $totalServicios, 2);
+    }
+
+    /**
+     * Recalcula el monto_venta_reparacion_base de todos los ítems que tengan asociado un insumo específico.
+     */
+    public static function recalcularItemsPorCambioInsumo($idInsumo): void
+    {
+        $itemsAfectadosIds = \App\Models\InventarioReparacionInsumo::where('id_insumo', $idInsumo)
+            ->pluck('id_inventario')
+            ->unique();
+
+        foreach ($itemsAfectadosIds as $idInv) {
+            $nuevoMonto = self::calcularMontoVentaReparacionBase($idInv);
+            Inventario::where('id_inventario', $idInv)->update(['monto_venta_reparacion_base' => $nuevoMonto]);
+        }
+    }
+
+    /**
+     * Recalcula el monto_venta_reparacion_base de todos los ítems que tengan asociado un servicio específico.
+     */
+    public static function recalcularItemsPorCambioServicio($idServicioTaller): void
+    {
+        $itemsAfectadosIds = \App\Models\InventarioReparacionServicio::where('id_servicio_taller', $idServicioTaller)
+            ->pluck('id_inventario')
+            ->unique();
+
+        foreach ($itemsAfectadosIds as $idInv) {
+            $nuevoMonto = self::calcularMontoVentaReparacionBase($idInv);
+            Inventario::where('id_inventario', $idInv)->update(['monto_venta_reparacion_base' => $nuevoMonto]);
+        }
     }
 }

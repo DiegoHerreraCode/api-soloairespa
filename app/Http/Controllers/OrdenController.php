@@ -103,6 +103,18 @@ class OrdenController extends Controller
             'repuestos_entrantes.*.serial' => 'nullable|string|max:100',
             'repuestos_entrantes.*.service_tag' => 'nullable|string|max:100',
             'repuestos_entrantes.*.nombre' => 'nullable|string|max:100',
+            'repuestos_entrantes.*.insumos' => 'nullable|array',
+            'repuestos_entrantes.*.insumos.*.id_inventario' => 'required|integer|exists:inventario,id_inventario',
+            'repuestos_entrantes.*.insumos.*.cantidad' => 'required|numeric|min:1',
+            'repuestos_entrantes.*.insumos.*.costo_unitario' => 'nullable|numeric|min:0',
+            'repuestos_entrantes.*.insumos.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
+            'repuestos_entrantes.*.insumos.*.porcentaje_iva' => 'nullable|numeric|min:0',
+            'repuestos_entrantes.*.servicios' => 'nullable|array',
+            'repuestos_entrantes.*.servicios.*.id_servicio_taller' => 'required|integer|exists:servicios_taller,id_servicio_taller',
+            'repuestos_entrantes.*.servicios.*.cantidad' => 'required|numeric|min:1',
+            'repuestos_entrantes.*.servicios.*.costo_unitario' => 'nullable|numeric|min:0',
+            'repuestos_entrantes.*.servicios.*.costo_unitario_con_ganancia' => 'nullable|numeric|min:0',
+            'repuestos_entrantes.*.servicios.*.porcentaje_iva' => 'nullable|numeric|min:0',
         ]);
 
         $data = $request->all();

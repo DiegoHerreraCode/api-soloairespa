@@ -7,8 +7,8 @@ use App\Models\ApiModel;
 /**
  * Modelo ServicioTaller
  * 
- * Catálogo de servicios de mano de obra y taller (ej: desarme, embobinado, limpieza, rectificación).
- * Define costos base, IVA y margen de ganancia estándar.
+ * CatÃ¡logo de servicios de mano de obra y taller (ej: desarme, embobinado, limpieza, rectificaciÃ³n).
+ * Define costos base, IVA, margen de ganancia estÃ¡ndar y monto de venta unitario.
  */
 class ServicioTaller extends ApiModel
 {
@@ -25,10 +25,11 @@ class ServicioTaller extends ApiModel
         'costo_base',
         'porcentaje_iva',
         'porcentaje_ganancia',
+        'monto_venta_unitario',
     ];
 
     /**
-     * Relación con la categoría o tipo de servicio de taller.
+     * RelaciÃ³n con la categorÃ­a o tipo de servicio de taller.
      * Consulta SQL Raw equivalente:
      * SELECT * FROM tipos_servicios_taller WHERE id_tipo_servicio_taller = servicios_taller.id_tipo_servicio_taller LIMIT 1;
      */

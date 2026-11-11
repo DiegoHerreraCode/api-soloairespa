@@ -64,6 +64,11 @@ class ReparacionServicioTallerService
         // Recalcular costos consolidados de la reparaci�n
         ReparacionService::recalcularCostosReparacion($servicio->id_reparacion);
 
+        $rep = \App\Models\Reparacion::find($servicio->id_reparacion);
+        if ($rep && ! empty($rep->id_orden)) {
+            OrdenService::recalcularOrdenDesdeReparaciones($rep->id_orden);
+        }
+
         DB::commit();
 
         return $servicio;

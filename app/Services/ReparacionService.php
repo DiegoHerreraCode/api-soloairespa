@@ -603,64 +603,28 @@ class ReparacionService
                 $totalIva = 0.00;
                 $totalNeto = 0.00;
 
-                // Grabar los N registros en detalles_ordenes (uno por cada reparaci�n / repuesto)
+                                // Sincronizar salida de repuestos y métricas de inventario de las reparaciones finalizadas
                 foreach ($reparacionesOrden as $rep) {
                     $repuestoAsociado = Repuesto::find($rep->id_repuesto);
                     $itemInventario = $repuestoAsociado ? Inventario::find($repuestoAsociado->id_inventario) : null;
                     $subtotalLinea = (float) ($rep->costo_total_con_ganancia ?? 0.00);
-                    $ivaLinea = (float) ($rep->monto_total_iva ?? 0.00);
-                    $totalLinea = $subtotalLinea + $ivaLinea;
 
-                    $porcentajeIva = 0.00;
-                    if ($subtotalLinea > 0 && $ivaLinea > 0) {
-                        $porcentajeIva = (float) ($itemInventario->porcentaje_iva ?? round(($ivaLinea / $subtotalLinea) * 100, 2));
-                    }
-
-                    // Grabar registro en detalles_ordenes con id_repuesto_saliente
-                    DetalleOrden::create([
-                        'id_orden' => $orden->id_orden,
-                        'id_inventario_insumo_saliente' => null,
-                        'id_inventario_repuesto_saliente' => $repuestoAsociado ? $repuestoAsociado->id_inventario : null,
-                        'id_repuesto_saliente' => $repuestoAsociado ? $repuestoAsociado->id_repuesto : null,
-                        'id_inventario_repuesto_entrante' => null,
-                        'id_repuesto_entrante' => null,
-                        'cantidad' => 1,
-                        'precio_unitario' => $subtotalLinea,
-                        'monto_tasacion' => 0.00,
-                        'monto_total_linea_sin_iva' => $subtotalLinea,
-                        'porcentaje_iva' => $porcentajeIva,
-                        'monto_iva' => $ivaLinea,
-                        'monto_total_linea_con_iva' => $totalLinea,
-                    ]);
-
-                    // Asignar salida contable y f�sica del repuesto reparado
-                    if ($repuestoAsociado) {
+                    // Asignar salida contable y física del repuesto reparado
+                    if ($repuestoAsociado && empty($repuestoAsociado->id_orden_salida)) {
                         $repuestoAsociado->update([
                             'id_orden_salida' => $orden->id_orden,
                         ]);
                     }
 
-                    // Descontar inventario del cliente (cantidad_total, cantidad_cliente) y registrar m�tricas hist�ricas
+                    // Descontar inventario del cliente (cantidad_total, cantidad_cliente) y registrar métricas históricas
                     if ($itemInventario) {
                         InventarioService::actualizarPorReparacionEntrega($itemInventario, 1, $subtotalLinea);
                     }
-
-                    if ($porcentajeIva > 0) {
-                        $totalGravado += $subtotalLinea;
-                    } else {
-                        $totalExento += $subtotalLinea;
-                    }
-                    $totalIva += $ivaLinea;
-                    $totalNeto += $totalLinea;
                 }
 
-                // Actualizar montos definitivos consolidados y marcar la orden como finalizada
+                // Sincronizar montos consolidados y marcar la orden como finalizada
+                OrdenService::recalcularOrdenDesdeReparaciones($orden->id_orden);
                 $orden->update([
-                    'monto_total_gravado' => round($totalGravado, 2),
-                    'monto_total_exento' => round($totalExento, 2),
-                    'monto_total_iva' => round($totalIva, 2),
-                    'monto_total' => round($totalNeto, 2),
-                    'monto_pendiente' => round($totalNeto, 2),
                     'estado_operativo' => OrdenEstadoOperativo::FINALIZADA->value,
                     'last_update' => now(),
                 ]);
