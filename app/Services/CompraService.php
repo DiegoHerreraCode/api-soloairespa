@@ -320,18 +320,27 @@ class CompraService
                 ]);
             }
         } elseif (in_array($tipo, ['compresor', 'valvula'])) {
+            $condicionItem = $item->condicion instanceof \BackedEnum ? $item->condicion->value : (string) $item->condicion;
+            $esUsado = strtolower((string) $condicionItem) === 'usado';
+
             for ($i = 0; $i < $detalle->cantidad; $i++) {
                 $serialData = $seriales[$i] ?? [];
                 $serviceTag = !empty($serialData['service_tag'])
                     ? trim($serialData['service_tag'])
                     : (($serialData['nombre'] ?? ($item->nombre . ' #' . ($i + 1))) . '_' . now()->format('Ymd_His') . '_' . ($i + 1));
 
+                // Si viene un estado especificado en el serial (nuevo, pendiente_reparacion, reparado), usarlo;
+                // si no viene pero el item es usado, por defecto es pendiente_reparacion, de lo contrario nuevo.
+                $estadoRepuesto = !empty($serialData['estado'])
+                    ? $serialData['estado']
+                    : ($esUsado ? 'pendiente_reparacion' : 'nuevo');
+
                 Repuesto::create([
                     'id_inventario' => $item->id_inventario,
                     'id_detalle_compra' => $detalle->id_detalle_compra,
                     'serial' => $serialData['serial'] ?? null,
                     'service_tag' => $serviceTag,
-                    'estado' => 'nuevo',
+                    'estado' => $estadoRepuesto,
                     'propietario' => true,
                     'costo_adquisicion' => $detalle->costo_unitario,
                     'costo_reparacion_base' => 0.00,
