@@ -290,17 +290,33 @@ class OrdenService
                     ];
                 } else {
                     $cantRequerida = (int) ($linea['cantidad'] ?? 1);
-                    // Consulta SQL Raw equivalente:
-                    // SELECT * FROM "repuestos"
-                    // WHERE "id_inventario" = :id_inventario
-                    //   AND "id_orden_salida" IS NULL
-                    //   AND "propietario" = true
-                    // LIMIT :cantRequerida;
-                    $repuestosDisponibles = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
+
+                    // Buscar n repuestos en estado 'nuevo' o 'reparado' (NO pendiente_reparacion),
+                    // pertenecientes al taller (propietario = true), sin orden de salida,
+                    // y que correspondan a la condición del ítem de inventario si aplica,
+                    // ordenados ascendentemente por id_repuesto (FIFO).
+                    $query = Repuesto::where('id_inventario', $linea['id_inventario_repuesto_saliente'])
                         ->whereNull('id_orden_salida')
                         ->where('propietario', true)
+                        ->whereIn('estado', ['nuevo', 'reparado']);
+
+                    if ($item && !empty($item->condicion)) {
+                        $condicionItem = strtolower((string) ($item->condicion instanceof \BackedEnum ? $item->condicion->value : $item->condicion));
+                        if ($condicionItem === 'nuevo') {
+                            $query->where('estado', 'nuevo');
+                        } elseif ($condicionItem === 'usado') {
+                            $query->where('estado', 'reparado');
+                        }
+                    }
+
+                    $repuestosDisponibles = $query->orderBy('id_repuesto', 'asc')
                         ->limit($cantRequerida)
                         ->get();
+
+                    if ($repuestosDisponibles->count() < $cantRequerida) {
+                        $nombreItem = $item ? $item->nombre : "Ítem #{$linea['id_inventario_repuesto_saliente']}";
+                        throw new \Exception("Stock físico disponible insuficiente para '{$nombreItem}'. Se requieren {$cantRequerida} unidades (nuevas o reparadas) y solo hay {$repuestosDisponibles->count()} disponibles en bodega.");
+                    }
 
                     foreach ($repuestosDisponibles as $rd) {
                         $listaRepuestosSalientes[] = [
@@ -336,11 +352,8 @@ class OrdenService
 
                     // Descontar repuesto serializado inmediatamente al crear la orden
                     if ($repuesto) {
-                        $costoTotal = (float) $repuesto->costo_total;
                         $repuesto->update([
                             'id_orden_salida' => $orden->id_orden,
-                            'monto_venta_real' => $precioUnitario,
-                            'utilidad' => round($precioUnitario - $costoTotal, 2),
                         ]);
                     }
 
@@ -426,11 +439,8 @@ class OrdenService
             if ($idRepuestoSaliente) {
                 $repSaliente = Repuesto::find($idRepuestoSaliente);
                 if ($repSaliente) {
-                    $costoTotal = (float) $repSaliente->costo_total;
                     $repSaliente->update([
                         'id_orden_salida' => $orden->id_orden,
-                        'monto_venta_real' => $precioUnitario,
-                        'utilidad' => round($precioUnitario - $costoTotal, 2),
                     ]);
                 }
             }
@@ -639,8 +649,6 @@ class OrdenService
                     if ($repuesto) {
                         $repuesto->update([
                             'id_orden_salida' => null,
-                            'monto_venta_real' => null,
-                            'utilidad' => null,
                         ]);
                         $item = Inventario::find($repuesto->id_inventario);
                         if ($item) {
@@ -665,8 +673,6 @@ class OrdenService
                     if ($repSaliente) {
                         $repSaliente->update([
                             'id_orden_salida' => null,
-                            'monto_venta_real' => null,
-                            'utilidad' => null,
                         ]);
                         $itemSaliente = Inventario::find($repSaliente->id_inventario);
                         if ($itemSaliente) {
@@ -685,8 +691,6 @@ class OrdenService
                     if ($repEntrante) {
                         $repEntrante->update([
                             'id_orden_salida' => $orden->id_orden,
-                            'monto_venta_real' => 0.00,
-                            'utilidad' => 0.00,
                         ]);
                         $itemEntrante = Inventario::find($repEntrante->id_inventario);
                         if ($itemEntrante) {
@@ -707,8 +711,6 @@ class OrdenService
             foreach ($repuestosCliente as $repCli) {
                 $repCli->update([
                     'id_orden_salida' => $orden->id_orden,
-                    'monto_venta_real' => 0.00,
-                    'utilidad' => 0.00,
                 ]);
 
                 // Si la orden a�n no estaba finalizada, descontar de cantidad_total y cantidad_cliente porque a�n figuraban en taller

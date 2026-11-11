@@ -635,11 +635,8 @@ class ReparacionService
 
                     // Asignar salida contable y f�sica del repuesto reparado
                     if ($repuestoAsociado) {
-                        $costoTotalRep = (float) $repuestoAsociado->costo_total;
                         $repuestoAsociado->update([
                             'id_orden_salida' => $orden->id_orden,
-                            'monto_venta_real' => $subtotalLinea,
-                            'utilidad' => round($subtotalLinea - $costoTotalRep, 2),
                         ]);
                     }
 

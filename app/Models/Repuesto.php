@@ -8,9 +8,9 @@ use App\Enums\RepuestoEstado;
 /**
  * Modelo Repuesto
  * 
- * Pieza fÌsica serializada individual (compresor, v·lvula, etc.).
+ * Pieza f√≠sica serializada individual (compresor, v√°lvula, etc.).
  * Controla propiedad (taller vs cliente), trazabilidad de entrada y salida,
- * costo de adquisiciÛn (compra o tasaciÛn) y costos de reparaciÛn acumulados.
+ * costo de adquisici√≥n (compra o tasaci√≥n) y costos de reparaci√≥n acumulados.
  */
 class Repuesto extends ApiModel
 {
@@ -33,8 +33,6 @@ class Repuesto extends ApiModel
         'costo_reparacion_base',
         'costo_total',
         'costo_reparacion_con_ganancia',
-        'monto_venta_real',
-        'utilidad',
     ];
 
     protected $casts = [
@@ -42,7 +40,7 @@ class Repuesto extends ApiModel
     ];
 
     /**
-     * Õtem maestro de inventario al que pertenece la pieza.
+     * √çtem maestro de inventario al que pertenece la pieza.
      * Consulta SQL Raw:
      * SELECT * FROM inventario WHERE id_inventario = repuestos.id_inventario LIMIT 1;
      */
@@ -52,7 +50,7 @@ class Repuesto extends ApiModel
     }
 
     /**
-     * Orden de trabajo por la cual ingresÛ el repuesto (recambio o recepciÛn para reparaciÛn).
+     * Orden de trabajo por la cual ingres√≥ el repuesto (recambio o recepci√≥n para reparaci√≥n).
      * Consulta SQL Raw:
      * SELECT * FROM ordenes WHERE id_orden = repuestos.id_orden_entrada LIMIT 1;
      */
@@ -62,7 +60,7 @@ class Repuesto extends ApiModel
     }
 
     /**
-     * Orden de trabajo por la cual saliÛ el repuesto (venta, recambio o entrega final).
+     * Orden de trabajo por la cual sali√≥ el repuesto (venta, recambio o entrega final).
      * Consulta SQL Raw:
      * SELECT * FROM ordenes WHERE id_orden = repuestos.id_orden_salida LIMIT 1;
      */
@@ -72,7 +70,7 @@ class Repuesto extends ApiModel
     }
 
     /**
-     * LÌnea de compra al proveedor por la cual ingresÛ (si fue adquirido nuevo).
+     * L√≠nea de compra al proveedor por la cual ingres√≥ (si fue adquirido nuevo).
      * Consulta SQL Raw:
      * SELECT * FROM detalles_compras WHERE id_detalle_compra = repuestos.id_detalle_compra LIMIT 1;
      */
@@ -82,7 +80,7 @@ class Repuesto extends ApiModel
     }
 
     /**
-     * Reparaciones y servicios de mantenimiento ejecutados sobre esta pieza fÌsica.
+     * Reparaciones y servicios de mantenimiento ejecutados sobre esta pieza f√≠sica.
      * Consulta SQL Raw:
      * SELECT * FROM reparaciones WHERE id_repuesto = repuestos.id_repuesto;
      */
