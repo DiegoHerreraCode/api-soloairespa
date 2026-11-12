@@ -99,17 +99,31 @@ class SendGridApiTransport extends AbstractTransport
             foreach ($email->getAttachments() as $attachment) {
                 $bodyContent = '';
                 try {
-                    $bodyContent = $attachment->bodyToString();
+                    $bodyContent = $attachment->getBody();
                 } catch (\Throwable $e) {
                     try {
-                        $bodyContent = $attachment->getBody();
+                        $bodyContent = $attachment->bodyToString();
                     } catch (\Throwable $e2) {
                         $bodyContent = '';
                     }
                 }
 
+                // Si getBody() devolvió una cadena cruda o si ya venía codificada en base64
+                // Verificamos si ya está codificada en base64 para no hacer doble encode
+                $base64Content = '';
+                if (!empty($bodyContent)) {
+                    $decoded = base64_decode(trim($bodyContent), true);
+                    if ($decoded !== false && base64_encode($decoded) === trim($bodyContent)) {
+                        // Ya es una cadena base64 válida (como la que produce Symfony DataPart por defecto)
+                        $base64Content = trim($bodyContent);
+                    } else {
+                        // Son bytes crudos binarios
+                        $base64Content = base64_encode($bodyContent);
+                    }
+                }
+
                 $attachments[] = [
-                    'content' => base64_encode($bodyContent),
+                    'content' => $base64Content,
                     'filename' => $attachment->getFilename(),
                     'type' => $attachment->getContentType() ?: 'application/pdf',
                     'disposition' => 'attachment',
