@@ -113,10 +113,21 @@ class CotizacionService
         // num_cotizacion se completa en Cotizacion::booted
 
         // 3. Formatear service_tags de repuestos a reparar si es Reparación:
-        // - Si es cotización INICIAL: genera nombres únicos agregando timestamp.
-        // - Si es cotización EXTRA (o el repuesto ya tiene su service_tag definitivo): conserva el tag exacto.
-        $mapaNombres = []; // Mapa [nombre_original => nombre_con_timestamp]
-        if (! empty($data['services_tags_repuestos_a_reparar'])) {
+        // Si vienen repuestos_entrantes_reparacion estructurados (con service_tag, serial, id_inventario),
+        // se conservan directamente sus tags unicos generados por el generador.
+        $mapaNombres = []; // Mapa [nombre_original => nombre_final]
+        if (! empty($data['repuestos_entrantes_reparacion'])) {
+            $tags = [];
+            foreach ($data['repuestos_entrantes_reparacion'] as $repEntrante) {
+                $tagLimpio = trim((string) ($repEntrante['service_tag'] ?? ''));
+                if ($tagLimpio) {
+                    $tags[] = $tagLimpio;
+                    $mapaNombres[$tagLimpio] = $tagLimpio;
+                }
+            }
+            $data['services_tags_repuestos_a_reparar'] = $tags;
+            $data['num_repuestos_a_reparar'] = count($tags);
+        } elseif (! empty($data['services_tags_repuestos_a_reparar'])) {
             $esTipoExtra = ($data['tipo'] ?? null) === CotizacionTipo::EXTRA->value || ($data['tipo'] ?? null) === CotizacionTipo::EXTRA;
             $tagsOriginales = $data['services_tags_repuestos_a_reparar'];
 
@@ -746,8 +757,11 @@ class CotizacionService
      */
     protected static function generarOrdenReparacionDesdeCotizacion(Cotizacion $cotizacion, array $data)
     {
-        // $data['repuestos_entrantes'] contiene el serial y nombre físico de cada pieza
-        $repuestosEntrantes = $data['repuestos_entrantes'] ?? [];
+        // 1. Obtener los repuestos entrantes:
+        // Si la cotización ya los guardó en repuestos_entrantes_reparacion al crearse, los usamos prioritariamente.
+        $repuestosEntrantes = ! empty($cotizacion->repuestos_entrantes_reparacion)
+            ? $cotizacion->repuestos_entrantes_reparacion
+            : ($data['repuestos_entrantes'] ?? []);
 
         $ordenData = [
             'id_cliente' => $cotizacion->id_cliente,

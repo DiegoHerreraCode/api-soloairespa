@@ -42,6 +42,7 @@ class Cotizacion extends ApiModel
         'motivo_anulacion',
         'num_repuestos_a_reparar',
         'services_tags_repuestos_a_reparar',
+        'repuestos_entrantes_reparacion',
     ];
 
     protected $casts = [
@@ -55,6 +56,7 @@ class Cotizacion extends ApiModel
         'fecha_vencimiento' => 'date:Y-m-d',
         'fecha_anulacion' => 'date:Y-m-d',
         'num_repuestos_a_reparar' => 'integer',
+        'repuestos_entrantes_reparacion' => 'array',
     ];
 
     /**

@@ -56,6 +56,11 @@ class CotizacionController extends Controller
             'num_repuestos_a_reparar' => 'nullable|integer|min:1',
             'services_tags_repuestos_a_reparar' => 'nullable|array',
             'services_tags_repuestos_a_reparar.*' => 'required_with:services_tags_repuestos_a_reparar|string|max:100',
+            'repuestos_entrantes_reparacion' => 'nullable|array',
+            'repuestos_entrantes_reparacion.*.service_tag' => 'required_with:repuestos_entrantes_reparacion|string|max:100',
+            'repuestos_entrantes_reparacion.*.serial' => 'nullable|string|max:100',
+            'repuestos_entrantes_reparacion.*.id_inventario' => 'required_with:repuestos_entrantes_reparacion|integer|exists:inventario,id_inventario',
+            'correo_destino' => 'nullable|email',
 
             // Líneas de inventario (insumos, repuestos salientes o recambios)
             'detalles_inventario' => 'nullable|array',
