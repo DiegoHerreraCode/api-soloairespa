@@ -278,11 +278,18 @@ class CotizacionService
             if (! empty($correoDestino) && filter_var($correoDestino, FILTER_VALIDATE_EMAIL)) {
                 try {
                     $disco = config('filesystems.default') === 's3' ? 's3' : 'public';
-                    $rutaCompletaAdjunto = Storage::disk($disco)->path($pdfPath);
+                    $storageDisk = Storage::disk($disco);
 
-                    if (file_exists($rutaCompletaAdjunto)) {
+                    // Obtener bytes del archivo directamente del Storage (compatible con Supabase S3 y local/Render)
+                    $pdfContent = null;
+                    if ($storageDisk->exists($pdfPath)) {
+                        $pdfContent = $storageDisk->get($pdfPath);
+                    }
+
+                    if ($pdfContent) {
                         $numCot = $cotizacion->num_cotizacion ?: $cotizacion->id_cotizacion;
                         $clienteNombre = $cotizacion->cliente ? $cotizacion->cliente->nombre : 'Estimado Cliente';
+                        $filename = basename($pdfPath);
 
                         MailerService::enviarCorreo(
                             ['to' => [$correoDestino]],
@@ -293,7 +300,11 @@ class CotizacionService
                                 'numCotizacion' => $numCot,
                                 'montoTotal' => $cotizacion->monto_total,
                             ],
-                            [$rutaCompletaAdjunto]
+                            [[
+                                'data' => $pdfContent,
+                                'name' => $filename,
+                                'mime' => 'application/pdf',
+                            ]]
                         );
                     }
                 } catch (\Throwable $eMail) {

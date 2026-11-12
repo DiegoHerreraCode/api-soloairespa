@@ -57,8 +57,19 @@ class Mailer extends Mailable
         $adjuntos = [];
 
         if (!empty($this->adjuntos)) {
-            $adjuntos = array_map(function ($ruta_adjunto) {
-                return Attachment::fromPath($ruta_adjunto);
+            $adjuntos = array_map(function ($adjunto) {
+                if (is_array($adjunto) && isset($adjunto['data'])) {
+                    return Attachment::fromData(
+                        fn () => $adjunto['data'],
+                        $adjunto['name'] ?? 'documento.pdf'
+                    )->withMime($adjunto['mime'] ?? 'application/pdf');
+                }
+
+                if (is_string($adjunto)) {
+                    return Attachment::fromPath($adjunto);
+                }
+
+                return $adjunto;
             }, $this->adjuntos);
         }
 
