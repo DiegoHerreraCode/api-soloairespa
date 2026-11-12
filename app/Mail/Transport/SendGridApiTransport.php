@@ -97,10 +97,21 @@ class SendGridApiTransport extends AbstractTransport
         if (!empty($email->getAttachments())) {
             $attachments = [];
             foreach ($email->getAttachments() as $attachment) {
+                $bodyContent = '';
+                try {
+                    $bodyContent = $attachment->bodyToString();
+                } catch (\Throwable $e) {
+                    try {
+                        $bodyContent = $attachment->getBody();
+                    } catch (\Throwable $e2) {
+                        $bodyContent = '';
+                    }
+                }
+
                 $attachments[] = [
-                    'content' => base64_encode($attachment->getBody()),
+                    'content' => base64_encode($bodyContent),
                     'filename' => $attachment->getFilename(),
-                    'type' => $attachment->getContentType(),
+                    'type' => $attachment->getContentType() ?: 'application/pdf',
                     'disposition' => 'attachment',
                 ];
             }

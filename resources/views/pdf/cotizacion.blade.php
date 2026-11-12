@@ -368,9 +368,12 @@
     @php
         $tipoOrdenSlug = strtolower(trim($tipoOrden->nombre ?? ($cotizacion->orden->tipoOrden->nombre ?? '')));
         $esVenta = str_contains($tipoOrdenSlug, 'venta');
+        $esRecambio = str_contains($tipoOrdenSlug, 'recambio');
         $esReparacion = str_contains($tipoOrdenSlug, 'reparacion');
         $esCotizacionInicial = ($cotizacion->tipo?->value ?? $cotizacion->tipo) === 'inicial';
         $esInicialReparacion = $esReparacion && $esCotizacionInicial;
+        // La columna service_tag solo debe mostrarse en cotizaciones de reparación (iniciales o extras)
+        $mostrarServiceTagCol = $esReparacion;
     @endphp
 
     @if($esInicialReparacion)
@@ -443,9 +446,9 @@
                 <thead>
                     <tr>
                         <th style="width: 12%;">SKU</th>
-                        <th style="{{ $esVenta ? 'width: 38%;' : 'width: 25%;' }}">DESCRIPCI&Oacute;N</th>
+                        <th style="{{ !$mostrarServiceTagCol ? 'width: 38%;' : 'width: 25%;' }}">DESCRIPCI&Oacute;N</th>
                         <th style="width: 6%;">CANT.</th>
-                        @if(!$esVenta)
+                        @if($mostrarServiceTagCol)
                             <th style="width: 13%;">SERVICE TAG</th>
                         @endif
                         <th style="width: 10%;">PRECIO UNIT.</th>
@@ -473,7 +476,7 @@
                             <td>{{ $skuItem }}</td>
                             <td>{{ $nombreItem }}</td>
                             <td class="font-bold">{{ $detInv->cantidad }}</td>
-                            @if(!$esVenta)
+                            @if($mostrarServiceTagCol)
                                 <td style="font-size: 8px;">{{ $detInv->service_tag_repuesto_a_reparar ?? "-" }}</td>
                             @endif
                             <td>${{ number_format($detInv->precio_unitario, 2, ",", ".") }}</td>
@@ -492,9 +495,9 @@
             <table class="grid-table">
                 <thead>
                     <tr>
-                        <th style="{{ $esVenta ? 'width: 46%;' : 'width: 32%;' }}">DESCRIPCI&Oacute;N SERVICIO</th>
+                        <th style="{{ !$mostrarServiceTagCol ? 'width: 46%;' : 'width: 32%;' }}">DESCRIPCI&Oacute;N SERVICIO</th>
                         <th style="width: 6%;">CANT.</th>
-                        @if(!$esVenta)
+                        @if($mostrarServiceTagCol)
                             <th style="width: 14%;">SERVICE TAG</th>
                         @endif
                         <th style="width: 11%;">PRECIO UNIT.</th>
@@ -512,7 +515,7 @@
                         <tr>
                             <td>{{ $nombreServ }}</td>
                             <td class="font-bold">{{ $detServ->cantidad }}</td>
-                            @if(!$esVenta)
+                            @if($mostrarServiceTagCol)
                                 <td style="font-size: 8px;">{{ $detServ->service_tag_repuesto_a_reparar ?? "-" }}</td>
                             @endif
                             <td>${{ number_format($detServ->precio_unitario, 2, ",", ".") }}</td>

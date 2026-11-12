@@ -60,6 +60,10 @@ class CotizacionController extends Controller
             'repuestos_entrantes_reparacion.*.service_tag' => 'required_with:repuestos_entrantes_reparacion|string|max:100',
             'repuestos_entrantes_reparacion.*.serial' => 'nullable|string|max:100',
             'repuestos_entrantes_reparacion.*.id_inventario' => 'required_with:repuestos_entrantes_reparacion|integer|exists:inventario,id_inventario',
+            'repuestos_entrantes_recambio' => 'nullable|array',
+            'repuestos_entrantes_recambio.*.service_tag' => 'required_with:repuestos_entrantes_recambio|string|max:100',
+            'repuestos_entrantes_recambio.*.serial' => 'nullable|string|max:100',
+            'repuestos_entrantes_recambio.*.id_inventario' => 'required_with:repuestos_entrantes_recambio|integer|exists:inventario,id_inventario',
             'correo_destino' => 'nullable|email',
 
             // Líneas de inventario (insumos, repuestos salientes o recambios)

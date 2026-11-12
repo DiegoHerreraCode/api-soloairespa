@@ -378,6 +378,7 @@ class CotizacionService
             'id_admin' => (auth()->id() ? (Admin::where('id_user', auth()->id())->value('id_admin') ?? 1) : 1),
             'id_cliente' => $orden->id_cliente,
             'id_tipo_orden' => $orden->id_tipo_orden,
+            'correo_destino' => $payloadModificacion['correo_destino'] ?? null,
             'num_cotizacion_padre' => $numCotizacionPadre,
             'tipo' => CotizacionTipo::EXTRA->value,
             'estado' => CotizacionEstado::PENDIENTE->value,
@@ -717,20 +718,35 @@ class CotizacionService
      */
     protected static function generarOrdenRecambioDesdeCotizacion(Cotizacion $cotizacion, array $data)
     {
-        // $data['detalles'] contiene id_repuesto_saliente, serial_entrante, service_tag_entrante y monto_tasacion
+        // 1. Obtener los repuestos entrantes de recambio:
+        // Prioridad: cotización->repuestos_entrantes_recambio si fue guardada al crearse
+        $repuestosEntrantes = ! empty($cotizacion->repuestos_entrantes_recambio)
+            ? $cotizacion->repuestos_entrantes_recambio
+            : ($data['repuestos_entrantes'] ?? []);
+
         $detallesPayload = [];
         $mapeosRecambio = $data['detalles'] ?? [];
 
         foreach ($cotizacion->detallesInventario as $idx => $det) {
             $mapeo = $mapeosRecambio[$idx] ?? [];
+            $entranteGuardado = $repuestosEntrantes[$idx] ?? [];
+
+            $serialEntrante = ! empty($entranteGuardado['serial'])
+                ? $entranteGuardado['serial']
+                : ($mapeo['serial_entrante'] ?? 'SN-REC-'.uniqid());
+
+            $serviceTagEntrante = ! empty($entranteGuardado['service_tag'])
+                ? $entranteGuardado['service_tag']
+                : ($mapeo['service_tag_entrante'] ?? $mapeo['nombre_entrante'] ?? 'Repuesto Recambio Entrante');
 
             $detallesPayload[] = [
                 'id_inventario_repuesto_saliente' => $det->id_inventario_repuesto_saliente,
                 'id_repuesto_saliente' => $mapeo['id_repuesto_saliente'] ?? null,
                 'precio_unitario' => $det->precio_unitario,
                 'id_inventario_repuesto_entrante' => $det->id_inventario_repuesto_entrante,
-                'serial_entrante' => $mapeo['serial_entrante'] ?? 'SN-REC-'.uniqid(),
-                'service_tag_entrante' => $mapeo['service_tag_entrante'] ?? $mapeo['nombre_entrante'] ?? 'Repuesto Recambio Entrante',
+                'serial_entrante' => $serialEntrante,
+                'service_tag' => $serviceTagEntrante,
+                'service_tag_entrante' => $serviceTagEntrante,
                 'monto_tasacion' => (float) ($mapeo['monto_tasacion'] ?? $det->monto_tasacion ?? 0.00),
                 'porcentaje_iva' => $det->porcentaje_iva,
                 'cantidad' => 1,
