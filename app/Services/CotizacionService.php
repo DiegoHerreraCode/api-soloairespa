@@ -19,6 +19,7 @@ use App\Models\Repuesto;
 use App\Models\Secuencia;
 use App\Models\ServicioTaller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Service CotizacionService
@@ -260,6 +261,34 @@ class CotizacionService
         $pdfPath = PDFService::generarCotizacionPDF($cotizacion);
         if ($pdfPath) {
             $cotizacion->update(['pdf_cotizacion' => $pdfPath]);
+
+            // Enviar automáticamente por correo si se especificó correo_destino o si el cliente tiene correo registrado
+            $correoDestino = ! empty($data['correo_destino']) ? trim((string) $data['correo_destino']) : ($cotizacion->cliente ? trim((string) $cotizacion->cliente->correo) : null);
+            if (! empty($correoDestino) && filter_var($correoDestino, FILTER_VALIDATE_EMAIL)) {
+                try {
+                    $disco = config('filesystems.default') === 's3' ? 's3' : 'public';
+                    $rutaCompletaAdjunto = Storage::disk($disco)->path($pdfPath);
+
+                    if (file_exists($rutaCompletaAdjunto)) {
+                        $numCot = $cotizacion->num_cotizacion ?: $cotizacion->id_cotizacion;
+                        $clienteNombre = $cotizacion->cliente ? $cotizacion->cliente->nombre : 'Estimado Cliente';
+
+                        MailerService::enviarCorreo(
+                            ['to' => [$correoDestino]],
+                            "Cotización #{$numCot} - Solo Aire SpA",
+                            'emails.cotizacion_pdf',
+                            [
+                                'clienteNombre' => $clienteNombre,
+                                'numCotizacion' => $numCot,
+                                'montoTotal' => $cotizacion->monto_total,
+                            ],
+                            [$rutaCompletaAdjunto]
+                        );
+                    }
+                } catch (\Throwable $eMail) {
+                    \Illuminate\Support\Facades\Log::error('Error al enviar correo de cotización: '.$eMail->getMessage());
+                }
+            }
         }
 
         return self::getOne($cotizacion->id_cotizacion);
@@ -442,9 +471,14 @@ class CotizacionService
                 return $e->getMessage();
             }
 
-            $cotizacion->update([
+            $updateData = [
                 'estado' => CotizacionEstado::ACEPTADA->value,
-            ]);
+            ];
+            if (! empty($data['num_orden_compra'])) {
+                $updateData['num_orden_compra'] = trim((string) $data['num_orden_compra']);
+            }
+
+            $cotizacion->update($updateData);
 
             DB::commit();
 
@@ -488,10 +522,15 @@ class CotizacionService
         }
 
         // Vincular cotización a la orden y marcar como aceptada
-        $cotizacion->update([
+        $updateData = [
             'id_orden' => $ordenCreada->id_orden,
             'estado' => CotizacionEstado::ACEPTADA->value,
-        ]);
+        ];
+        if (! empty($data['num_orden_compra'])) {
+            $updateData['num_orden_compra'] = trim((string) $data['num_orden_compra']);
+        }
+
+        $cotizacion->update($updateData);
 
         DB::commit();
 
@@ -621,7 +660,7 @@ class CotizacionService
             $repuestosSalientesLinea = [];
             $cantRequerida = (int) ($det->cantidad ?? 1);
 
-            // Si la línea es un repuesto (serializable), consumimos tantos seriales del payload como cantidad tenga la línea
+            // Si la línea es un repuesto (serializable) y se enviaron mapeos explícitos, los consumimos
             if (! empty($det->id_inventario_repuesto_saliente)) {
                 for ($k = 0; $k < $cantRequerida; $k++) {
                     $serialObj = $mapeosSeriales[$idxSerial] ?? null;

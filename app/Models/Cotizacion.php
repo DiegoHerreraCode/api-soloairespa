@@ -27,6 +27,7 @@ class Cotizacion extends ApiModel
         'id_tipo_orden',
         'num_cotizacion_padre',
         'num_cotizacion',
+        'num_orden_compra',
         'tipo',
         'monto_total_gravado',
         'monto_total_exento',

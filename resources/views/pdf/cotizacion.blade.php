@@ -344,14 +344,13 @@
         </table>
     </div>
 
-    <!-- 3. FECHAS / TIPO ORDEN / NUM COTIZACION PADRE -->
+    <!-- 3. FECHAS / TIPO ORDEN -->
     <table class="meta-table">
         <thead>
             <tr>
-                <th style="width: 25%;">FECHA EMISI&Oacute;N</th>
-                <th style="width: 25%;">FECHA VENCIMIENTO</th>
-                <th style="width: 25%;">TIPO DE &Oacute;RDEN</th>
-                <th style="width: 25%;"># COTIZACI&Oacute;N PADRE</th>
+                <th style="width: 33.3%;">FECHA EMISI&Oacute;N</th>
+                <th style="width: 33.3%;">FECHA VENCIMIENTO</th>
+                <th style="width: 33.4%;">TIPO DE &Oacute;RDEN</th>
             </tr>
         </thead>
         <tbody>
@@ -361,32 +360,31 @@
                 <td>{{ !empty($cotizacion->fecha_vencimiento) ? \Carbon\Carbon::parse($cotizacion->fecha_vencimiento)->format("d/m/Y") : "-" }}
                 </td>
                 <td class="uppercase">{{ $tipoOrden->nombre ?? ($cotizacion->orden->tipoOrden->nombre ?? "N/A") }}</td>
-                <td class="font-bold">
-                    {{ !empty($cotizacion->num_cotizacion_padre) ? $cotizacion->num_cotizacion_padre : "-" }}
-                </td>
             </tr>
         </tbody>
     </table>
 
     <!-- 4. REGISTROS DE LA TABLA COTIZACIONES_INVENTARIO -->
+    @php
+        $tipoOrdenSlug = strtolower(trim($tipoOrden->nombre ?? ($cotizacion->orden->tipoOrden->nombre ?? '')));
+        $esVenta = str_contains($tipoOrdenSlug, 'venta');
+    @endphp
     @if(isset($cotizacion->detallesInventario) && count($cotizacion->detallesInventario) > 0)
         <div class="items-section-title">DETALLE DE INSUMOS Y REPUESTOS (INVENTARIO)</div>
         <table class="grid-table">
             <thead>
                 <tr>
-                    <th style="width: 10%;">SKU</th>
-                    <th style="width: 7%;">ID INSUMO SAL.</th>
-                    <th style="width: 7%;">ID REP. SAL.</th>
-                    <th style="width: 7%;">ID REP. ENT.</th>
-                    <th style="width: 17%;">DESCRIPCI&Oacute;N</th>
-                    <th style="width: 5%;">CANT.</th>
-                    <th style="width: 8%;">PRECIO UNIT.</th>
-                    <th style="width: 7%;">TASACI&Oacute;N</th>
-                    <th style="width: 9%;">TOTAL SIN IVA</th>
-                    <th style="width: 5%;">% IVA</th>
-                    <th style="width: 7%;">MONTO IVA</th>
-                    <th style="width: 9%;">TOTAL CON IVA</th>
-                    <th style="width: 12%;">SERVICE TAG</th>
+                    <th style="width: 12%;">SKU</th>
+                    <th style="{{ $esVenta ? 'width: 38%;' : 'width: 25%;' }}">DESCRIPCI&Oacute;N</th>
+                    <th style="width: 6%;">CANT.</th>
+                    @if(!$esVenta)
+                        <th style="width: 13%;">SERVICE TAG</th>
+                    @endif
+                    <th style="width: 10%;">PRECIO UNIT.</th>
+                    <th style="width: 11%;">TOTAL SIN IVA</th>
+                    <th style="width: 6%;">% IVA</th>
+                    <th style="width: 8%;">MONTO IVA</th>
+                    <th style="width: 11%;">TOTAL CON IVA</th>
                 </tr>
             </thead>
             <tbody>
@@ -405,20 +403,16 @@
                     @endphp
                     <tr>
                         <td>{{ $skuItem }}</td>
-                        <td>{{ $detInv->id_inventario_insumo_saliente ?? "-" }}</td>
-                        <td>{{ $detInv->id_inventario_repuesto_saliente ?? "-" }}</td>
-                        <td>{{ $detInv->id_inventario_repuesto_entrante ?? "-" }}</td>
                         <td>{{ $nombreItem }}</td>
                         <td class="font-bold">{{ $detInv->cantidad }}</td>
+                        @if(!$esVenta)
+                            <td style="font-size: 8px;">{{ $detInv->service_tag_repuesto_a_reparar ?? "-" }}</td>
+                        @endif
                         <td>${{ number_format($detInv->precio_unitario, 2, ",", ".") }}</td>
-                        <td>
-                            {{ !empty($detInv->monto_tasacion) ? "$" . number_format($detInv->monto_tasacion, 2, ",", ".") : "-" }}
-                        </td>
                         <td class="font-bold">${{ number_format($detInv->monto_total_linea_sin_iva, 2, ",", ".") }}</td>
                         <td>{{ number_format($detInv->porcentaje_iva, 0) }}%</td>
                         <td>${{ number_format($detInv->monto_iva, 2, ",", ".") }}</td>
                         <td class="font-bold">${{ number_format($detInv->monto_total_linea_con_iva, 2, ",", ".") }}</td>
-                        <td style="font-size: 8px;">{{ $detInv->service_tag_repuesto_a_reparar ?? "-" }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -431,15 +425,16 @@
         <table class="grid-table">
             <thead>
                 <tr>
-                    <th style="width: 10%;">ID SERVICIO</th>
-                    <th style="width: 25%;">DESCRIPCI&Oacute;N SERVICIO</th>
+                    <th style="{{ $esVenta ? 'width: 46%;' : 'width: 32%;' }}">DESCRIPCI&Oacute;N SERVICIO</th>
                     <th style="width: 6%;">CANT.</th>
-                    <th style="width: 10%;">PRECIO UNIT.</th>
-                    <th style="width: 11%;">TOTAL SIN IVA</th>
+                    @if(!$esVenta)
+                        <th style="width: 14%;">SERVICE TAG</th>
+                    @endif
+                    <th style="width: 11%;">PRECIO UNIT.</th>
+                    <th style="width: 12%;">TOTAL SIN IVA</th>
                     <th style="width: 6%;">% IVA</th>
-                    <th style="width: 9%;">MONTO IVA</th>
+                    <th style="width: 8%;">MONTO IVA</th>
                     <th style="width: 11%;">TOTAL CON IVA</th>
-                    <th style="width: 12%;">SERVICE TAG</th>
                 </tr>
             </thead>
             <tbody>
@@ -448,15 +443,16 @@
                         $nombreServ = $detServ->servicioTaller->nombre ?? "-";
                     @endphp
                     <tr>
-                        <td>{{ $detServ->id_servicio_taller ?? "-" }}</td>
                         <td>{{ $nombreServ }}</td>
                         <td class="font-bold">{{ $detServ->cantidad }}</td>
+                        @if(!$esVenta)
+                            <td style="font-size: 8px;">{{ $detServ->service_tag_repuesto_a_reparar ?? "-" }}</td>
+                        @endif
                         <td>${{ number_format($detServ->precio_unitario, 2, ",", ".") }}</td>
                         <td class="font-bold">${{ number_format($detServ->monto_total_linea_sin_iva, 2, ",", ".") }}</td>
                         <td>{{ number_format($detServ->porcentaje_iva, 0) }}%</td>
                         <td>${{ number_format($detServ->monto_iva, 2, ",", ".") }}</td>
                         <td class="font-bold">${{ number_format($detServ->monto_total_linea_con_iva, 2, ",", ".") }}</td>
-                        <td style="font-size: 8px;">{{ $detServ->service_tag_repuesto_a_reparar ?? "-" }}</td>
                     </tr>
                 @endforeach
             </tbody>
